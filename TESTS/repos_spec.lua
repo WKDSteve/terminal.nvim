@@ -116,7 +116,14 @@ describe("terminal.repos.classify CI", function()
   end)
 
   it("names the approval command after the repository", function()
-    assert.equals("testing ci trust streamtap", classify.trust_command("streamtap"))
+    assert.equals("testing ci trust o/streamtap def", classify.trust_command("o/streamtap", "def"))
+    assert.equals(
+      "o/streamtap",
+      classify.owner_repo_of("https://github.com/o/streamtap/actions/runs/9")
+    )
+    assert.is_nil(classify.owner_repo_of("https://example.com/o/r/actions/runs/9"))
+    assert.is_nil(classify.trust_command("streamtap", "def"), "a bare name is not owner/repo")
+    assert.is_nil(classify.trust_command("o/r", "xyz"), "not a hex sha")
   end)
 
   it("offers no command for a directory name a shell would read as more than a word", function()
@@ -200,7 +207,7 @@ describe("terminal.repos", function()
         conclusion = "failure",
         name = "ci",
         headSha = "def",
-        url = "u9",
+        url = "https://github.com/o/streamtap/actions/runs/9",
       },
       {
         databaseId = 8,
@@ -224,9 +231,9 @@ describe("terminal.repos", function()
     })
     local rows = collect({ "/r/streamtap" }, { exec = exec, has_gh = true })
     assert.equals("approval", rows[1].ci)
-    assert.equals("testing ci trust streamtap", rows[1].trust)
+    assert.equals("testing ci trust o/streamtap def", rows[1].trust)
     assert.matches("waiting for approval", repos.format(rows[1]))
-    assert.matches("testing ci trust streamtap", repos.format(rows[1]))
+    assert.matches("testing ci trust o/streamtap def", repos.format(rows[1]))
 
     repos.reset()
     local genuine = vim.json.encode({
@@ -254,7 +261,7 @@ describe("terminal.repos", function()
           conclusion = "failure",
           name = name,
           headSha = "d",
-          url = "u" .. id,
+          url = "https://github.com/o/streamtap/actions/runs/" .. id,
         }
       end
       local runs = vim.json.encode({ run(2, "ci"), run(1, "lint") })
@@ -279,7 +286,7 @@ describe("terminal.repos", function()
       })
       local rows = collect({ "/r/streamtap" }, { exec = exec, has_gh = true })
       assert.equals("approval", rows[1].ci)
-      assert.equals("testing ci trust streamtap", rows[1].trust)
+      assert.equals("testing ci trust o/streamtap d", rows[1].trust)
 
       repos.reset()
       exec = fake({
@@ -291,7 +298,7 @@ describe("terminal.repos", function()
       rows = collect({ "/r/streamtap" }, { exec = exec, has_gh = true })
       assert.equals("red", rows[1].ci)
       assert.is_nil(rows[1].trust)
-      assert.equals("u1", rows[1].run_url)
+      assert.equals("https://github.com/o/streamtap/actions/runs/1", rows[1].run_url)
     end
   )
 
@@ -434,7 +441,7 @@ describe("terminal.repos.panel", function()
         conclusion = "failure",
         name = "ci",
         headSha = "d",
-        url = "u",
+        url = "https://github.com/o/streamtap/actions/runs/9",
       },
     })
     local refused = vim.json.encode({
@@ -457,6 +464,6 @@ describe("terminal.repos.panel", function()
     vim.fn.setreg("+", "")
     vim.fn.setreg('"', "")
     vim.api.nvim_feedkeys("y", "x", false)
-    assert.equals("testing ci trust streamtap", vim.fn.getreg('"'))
+    assert.equals("testing ci trust o/streamtap d", vim.fn.getreg('"'))
   end)
 end)

@@ -4,7 +4,7 @@
 red or stuck CI run, an unpushed commit or a dirty checkout is seen at a glance:
 
 ```
-streamtap                local: clean                  CI: waiting for approval   -> testing ci trust streamtap
+streamtap                local: clean                  CI: waiting for approval   -> testing ci trust o/streamtap abc1234
 terminal.nvim            local: 3 changed, ahead 1     CI: green
 ```
 
@@ -49,7 +49,7 @@ the run is `RED`.
 | Key | Does |
 |---|---|
 | `r` | ask `git` and `gh` again now (ignores the intervals) |
-| `y` | copy the approval command of the line (`testing ci trust <repo>`) |
+| `y` | copy the approval command of the line (`testing ci trust <owner/repo> <sha>`) |
 | `<CR>` | open the newest run of the line in the browser |
 | `q`, `<Esc>` | close |
 

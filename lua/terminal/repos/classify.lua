@@ -135,16 +135,28 @@ function M.ci_state(runs)
   return "none"
 end
 
---- The command that approves the commit of a refused run (testing.nvim's runner guard).
---- The name comes from a directory somebody chose and the command is copied to be pasted into a
---- shell: a name with anything but letters, digits, `.`, `_` and `-` gets no command.
----@param repo string Repository name
+--- The command that approves the commit of a refused run (testing.nvim's runner guard):
+--- `testing ci trust <owner/repo> <sha>`. Both parts end up in a command that is copied to be pasted
+--- into a shell, so anything but `owner/repo` of letters, digits, `.`, `_`, `-` and a hex sha gets no
+--- command.
+---@param owner_repo string
+---@param sha string
 ---@return string|nil command
-function M.trust_command(repo)
-  if not repo:match("^[%w._-]+$") then
+function M.trust_command(owner_repo, sha)
+  if type(owner_repo) ~= "string" or not owner_repo:match("^[%w._-]+/[%w._-]+$") then
     return nil
   end
-  return "testing ci trust " .. repo
+  if type(sha) ~= "string" or not sha:match("^%x+$") then
+    return nil
+  end
+  return ("testing ci trust %s %s"):format(owner_repo, sha)
+end
+
+--- `owner/repo` of a GitHub run url (`https://github.com/<owner>/<repo>/actions/runs/<id>`).
+---@param url? string
+---@return string|nil
+function M.owner_repo_of(url)
+  return type(url) == "string" and url:match("^https://github%.com/([%w._-]+/[%w._-]+)/") or nil
 end
 
 --- The local half of a row.

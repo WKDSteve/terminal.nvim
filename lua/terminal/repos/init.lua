@@ -208,7 +208,9 @@ local function refresh_ci(row, exec, done)
           end
         end
         row.run_id, row.run_url = shown.id, shown.url
-        row.trust = row.ci == "approval" and classify.trust_command(row.name) or nil
+        row.trust = row.ci == "approval"
+            and classify.trust_command(classify.owner_repo_of(runs[1].url) or "", sha)
+          or nil
         done()
       end
       local function lookup(i)
