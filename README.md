@@ -89,6 +89,7 @@ answers.
 
 ### Status export
 
+- [Repository status](docs/repos.md) — `:Terminal repos`: local state and CI (green, red, waiting for approval by the runner guard) of the repositories of the open terminals.
 - [Status export](docs/status.md) — mode, file, branch, diagnostics to tmux (pane options) and WezTerm (tab title, right status).
 
 ### Internals

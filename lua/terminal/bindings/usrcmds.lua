@@ -10,6 +10,7 @@
 ---                                      restart a native terminal as a tmux / WezTerm pane
 ---   :Terminal adopt [name]             view a multiplexer pane's screen in a read-only buffer
 ---   :Terminal list                     pick one of this project's terminals
+---   :Terminal repos                    local state and CI of the repositories of the open terminals
 ---   :Terminal send line|selection|file [name] [--exec]
 ---   :Terminal run [--name=] [--layout=] [--direct] [--] <command...>
 ---
@@ -523,6 +524,13 @@ function M.setup()
           if not terminal.pick() then
             notify.info("no terminals in this project")
           end
+        end,
+      },
+      {
+        path = { "repos" },
+        desc = "Show the repositories of the open terminals: local state and CI (green, red, waiting for approval)",
+        run = function()
+          require("terminal.repos.panel").open()
         end,
       },
       {

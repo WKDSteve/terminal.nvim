@@ -12,6 +12,7 @@ One compound command, `:Terminal <action> [args] [flags]`, with `<Tab>` completi
 | `:Terminal pin [name] [--backend=tmux\|wezterm] [--layout=]` | Restart a native terminal as a pane of tmux/WezTerm so it outlives Neovim (see below). |
 | `:Terminal adopt [name]` | Show a tmux/WezTerm terminal's screen in a read-only buffer. |
 | `:Terminal list` | Pick one of this project's terminals: open it, close it (`<C-x>`) or send it a line (`<C-s>`, Enter included); see "Picker" below. |
+| `:Terminal repos` | Float with one line per repository of the open terminals: local state and CI of the newest push (green, red, running, queued, waiting for approval); see [repos.md](repos.md). |
 | `:Terminal cheat [shell]` | Cheatsheet of the shell this terminal runs, one section at a time; see [cheatsheet.md](cheatsheet.md). |
 | `:Terminal send line [name] [--exec]` | Type the current line. |
 | `:'<,'>Terminal send selection [name] [--exec]` | Type the selection (see below). |

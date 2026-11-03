@@ -43,6 +43,8 @@ docs/backends.md, docs/status.md and docs/navigation.md.
                                 pane so it outlives Neovim. Not a transfer:
                                 the old output is gone.
 :Terminal adopt [name]          View a pane's screen in a read-only buffer.
+:Terminal repos                 Float: local state and CI of the repositories of
+                                the open terminals (see docs/repos.md).
 :Terminal list                  Pick one of this project's terminals (open,
                                 close, send a line).
 :Terminal cheat [shell]         Cheatsheet of the shell the terminal runs
