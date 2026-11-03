@@ -136,9 +136,14 @@ function M.ci_state(runs)
 end
 
 --- The command that approves the commit of a refused run (testing.nvim's runner guard).
+--- The name comes from a directory somebody chose and the command is copied to be pasted into a
+--- shell: a name with anything but letters, digits, `.`, `_` and `-` gets no command.
 ---@param repo string Repository name
----@return string
+---@return string|nil command
 function M.trust_command(repo)
+  if not repo:match("^[%w._-]+$") then
+    return nil
+  end
   return "testing ci trust " .. repo
 end
 

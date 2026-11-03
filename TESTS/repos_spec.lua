@@ -118,6 +118,12 @@ describe("terminal.repos.classify CI", function()
   it("names the approval command after the repository", function()
     assert.equals("testing ci trust streamtap", classify.trust_command("streamtap"))
   end)
+
+  it("offers no command for a directory name a shell would read as more than a word", function()
+    for _, bad in ipairs({ "a b", "x;rm -rf ~", "$(id)", "a`b`", "a&b", "", "a\nb" }) do
+      assert.is_nil(classify.trust_command(bad), bad)
+    end
+  end)
 end)
 
 --- A fake `git`/`gh`: `script[key]` is `{ code, stdout, stderr }`, key = the command joined by blanks.
