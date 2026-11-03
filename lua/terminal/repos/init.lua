@@ -20,6 +20,8 @@ M.LOCAL_INTERVAL_MS = 5000
 M.CI_INTERVAL_MS = 60000
 --- Seconds a single process may run.
 M.TIMEOUT_MS = 15000
+--- Most failed runs of one commit whose jobs are fetched to tell a guard refusal from a red run.
+M.MAX_FAILED_LOOKUPS = 5
 
 ---@alias Terminal.RepoExec fun(cmd: string[], cwd: string, on_done: fun(code: integer, stdout: string, stderr: string))
 
@@ -180,43 +182,49 @@ local function refresh_ci(row, exec, done)
         }
       end
       row.sha, row.ci_error = sha, nil
+      row.trust = nil
       row.ci = classify.ci_state(runs)
-      local failed
+      row.run_id, row.run_url = runs[1].id, runs[1].url
+
+      -- A failed run may be a refusal of the runner guard: only the steps of its jobs tell. Every
+      -- failed run is looked at (a commit with two refused workflows is waiting for approval, not
+      -- red), a few at most.
+      local failed = {}
       for _, r in ipairs(runs) do
-        if classify.run_state(r) == "red" then
-          failed = r
-          break
+        if classify.run_state(r) == "red" and #failed < M.MAX_FAILED_LOOKUPS then
+          failed[#failed + 1] = r
         end
       end
-      row.run_id = (failed or runs[1]).id
-      row.run_url = (failed or runs[1]).url
-      row.trust = nil
-      if not failed then
+      if #failed == 0 then
         return done()
       end
-      -- A failed run may be a refusal of the runner guard: only the steps of its jobs tell.
-      exec(
-        { "gh", "run", "view", tostring(failed.id), "--json", "jobs" },
-        row.root,
-        function(c2, out2)
-          local view = c2 == 0 and decode(out2) or nil
-          if type(view) == "table" and classify.refused_by_guard(view.jobs) then
-            row.ci = classify.ci_state({
-              { status = "completed", conclusion = "failure", jobs = view.jobs },
-            })
-            if row.ci == "approval" then
-              -- The other runs of the commit may still be red or running: keep the worst.
-              for _, r in ipairs(runs) do
-                if r ~= failed and classify.run_state(r) == "red" then
-                  row.ci = "red"
-                end
-              end
-            end
-            row.trust = row.ci == "approval" and classify.trust_command(row.name) or nil
+      local function finish_ci()
+        row.ci = classify.ci_state(runs)
+        local shown = runs[1]
+        for _, r in ipairs(runs) do
+          if classify.run_state(r) == "red" then
+            shown = r
+            break
           end
-          done()
         end
-      )
+        row.run_id, row.run_url = shown.id, shown.url
+        row.trust = row.ci == "approval" and classify.trust_command(row.name) or nil
+        done()
+      end
+      local function lookup(i)
+        local r = failed[i]
+        if not r then
+          return finish_ci()
+        end
+        exec({ "gh", "run", "view", tostring(r.id), "--json", "jobs" }, row.root, function(c2, out2)
+          local view = c2 == 0 and decode(out2) or nil
+          if type(view) == "table" then
+            r.jobs = view.jobs
+          end
+          lookup(i + 1)
+        end)
+      end
+      lookup(1)
     end
   )
 end

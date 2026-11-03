@@ -244,6 +244,57 @@ describe("terminal.repos", function()
     assert.is_nil(rows[1].trust)
   end)
 
+  it(
+    "two runs refused by the guard are waiting for approval; one genuine failure is red",
+    function()
+      local function run(id, name)
+        return {
+          databaseId = id,
+          status = "completed",
+          conclusion = "failure",
+          name = name,
+          headSha = "d",
+          url = "u" .. id,
+        }
+      end
+      local runs = vim.json.encode({ run(2, "ci"), run(1, "lint") })
+      local refused = vim.json.encode({
+        jobs = {
+          {
+            conclusion = "failure",
+            steps = { { name = "Set up runner", conclusion = "failure" } },
+          },
+        },
+      })
+      local genuine = vim.json.encode({
+        jobs = {
+          { conclusion = "failure", steps = { { name = "Run tests", conclusion = "failure" } } },
+        },
+      })
+      local exec = fake({
+        [STATUS] = { 0, "## main\n" },
+        [LIST] = { 0, runs },
+        ["gh run view 2 --json jobs"] = { 0, refused },
+        ["gh run view 1 --json jobs"] = { 0, refused },
+      })
+      local rows = collect({ "/r/streamtap" }, { exec = exec, has_gh = true })
+      assert.equals("approval", rows[1].ci)
+      assert.equals("testing ci trust streamtap", rows[1].trust)
+
+      repos.reset()
+      exec = fake({
+        [STATUS] = { 0, "## main\n" },
+        [LIST] = { 0, runs },
+        ["gh run view 2 --json jobs"] = { 0, refused },
+        ["gh run view 1 --json jobs"] = { 0, genuine },
+      })
+      rows = collect({ "/r/streamtap" }, { exec = exec, has_gh = true })
+      assert.equals("red", rows[1].ci)
+      assert.is_nil(rows[1].trust)
+      assert.equals("u1", rows[1].run_url)
+    end
+  )
+
   it("only the runs of the newest commit count", function()
     local exec = fake({
       [STATUS] = { 0, "## main\n" },

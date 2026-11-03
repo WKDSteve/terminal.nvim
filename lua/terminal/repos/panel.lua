@@ -80,11 +80,12 @@ local function render(rows)
       width = math.max(width, vim.fn.strdisplaywidth(l) + 2)
     end
     width = math.min(width, vim.o.columns - 4)
+    local height = math.max(1, math.min(#lines, vim.o.lines - 6))
     pcall(vim.api.nvim_win_set_config, state.win, {
       relative = "editor",
       width = width,
-      height = math.max(#lines, 1),
-      row = math.floor((vim.o.lines - #lines) / 2) - 1,
+      height = height,
+      row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1),
       col = math.floor((vim.o.columns - width) / 2),
     })
   end
@@ -162,7 +163,7 @@ function M.open(opts)
   end, "Copy the approval command of the repository")
   map("<CR>", function()
     local row = row_under_cursor()
-    if row and row.run_url then
+    if row and row.run_url and row.run_url:match("^https?://") then
       vim.ui.open(row.run_url)
     end
   end, "Open the newest CI run in the browser")
