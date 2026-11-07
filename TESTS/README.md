@@ -26,6 +26,7 @@ the plugin manager's folder) and exits non-zero when anything is missing or red.
 | `pin_adopt_spec.lua` | pin (order, preflight, ping, restore) and adopt |
 | `security_spec.lua` | seeded property specs (xorshift32): quoting, escapes, tmux arguments |
 | `health_spec.lua` | `:checkhealth terminal` |
+| `sheets_spec.lua` | the test sheets of `sheets/`: keys and `:Terminal` commands in a child editor with a UI attached, typed into real shells (`sh`, `cmd.exe`); WezTerm is the fake `wezterm cli`, what only a real multiplexer shows is their `manual` |
 | `ask_spec.lua` | the ask bridge: `$NVIM_ASK` in native terminals (real jobs), the user's env wins, `ask.enable = false`, no lib.nvim bridge, the health lines |
 | `collector_spec.lua` | the branch lookup (`.git/HEAD` mtime cache, the root memo, buffers that have no directory) |
 | `context_spec.lua` | project root and registry key against the real editor (8.3 short names, symlinks) |

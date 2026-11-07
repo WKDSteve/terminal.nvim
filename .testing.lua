@@ -11,11 +11,15 @@ return {
   -- One nvim per spec file: nothing leaks from one file into the next (terminal jobs, windows).
   isolated = "file",
   host = "c",
+  -- The worktree of `ci commit` has no sibling checkouts: the child editors of the sheets find them this way.
+  env_allow = { "LIB_NVIM_DIR", "TESTING_NVIM_DIR" },
   -- A case without assertions fails: a spec that asserts nothing proves nothing.
   assertions = "error",
   -- Real shells are started by some specs (a PowerShell property run takes 5-10 s on a machine
   -- that is busy with something else); the default of 10 s per case cut them off.
-  timeouts = { case_ms = 30000, file_ms = 180000 },
+  -- All test sheets run in one spec file, one child editor each: the defaults are reached under load there too
+  -- (fileops, 2026-11-07).
+  timeouts = { case_ms = 30000, file_ms = 300000 },
   guards = {
     fs = "error",
     scheduled_error = "error",
@@ -23,6 +27,10 @@ return {
     deprecation = "error",
     -- The native backend starts real shell jobs in specs that exercise it, so process_net stays
     -- at its default; specs for the pure core never start one.
+  },
+  guard_allow = {
+    -- sheets_spec.lua: every test sheet (TESTS/sheets/) runs in a child editor.
+    spawn = { "nvim" },
   },
   -- gated: a failed conformance check makes `scripts/test.sh conformance` exit 1 (docs/CONFORMANCE.md of testing.nvim)
   conformance = {
