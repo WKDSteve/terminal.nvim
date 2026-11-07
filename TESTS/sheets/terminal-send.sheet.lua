@@ -10,7 +10,7 @@ return {
       _G.setup()
       _G.home = vim.api.nvim_get_current_win()
       vim.api.nvim_buf_set_lines(0, 0, -1, false, {
-        "echo typed-only",
+        "echo typed>typed.txt",
         "echo ran>line.txt",
         "pick echo inner>sel.txt end",
         "first row",
@@ -19,13 +19,16 @@ return {
       vim.api.nvim_win_set_cursor(0, { 1, 0 })]],
     },
 
-    { keys = ":Terminal send line<CR>", note = "typed into the run terminal, created on the way" },
-    { wait = [[_G.ready("run")]], timeout = 8000 },
-    { wait = [[_G.shows("run", "echo typed-only")]], timeout = 8000, note = "it arrives" },
-    { lua = [[vim.wait(300)]], note = "time to run, if it did" },
     {
-      expect = [[not _G.shows("run", "typed-only", 2)]],
-      note = "without --exec nothing ran: the word is on the screen once, as typed",
+      keys = ":Terminal send line typed<CR>",
+      note = "typed into a named terminal, created on the way",
+    },
+    { wait = [[_G.ready("typed")]], timeout = 8000 },
+    { wait = [[_G.shows("typed", "echo typed>typed.txt")]], timeout = 8000, note = "it arrives" },
+    { lua = [[vim.wait(500)]], note = "time to run, if it did" },
+    {
+      expect = [[vim.uv.fs_stat(_G.DIR .. "/typed.txt") == nil]],
+      note = "without --exec nothing ran: no file (the screen cannot say, a tty may echo it twice)",
     },
     {
       expect = [[vim.api.nvim_get_current_win() == _G.home]],
@@ -33,7 +36,7 @@ return {
     },
 
     { lua = [[vim.api.nvim_win_set_cursor(0, { 2, 0 })]] },
-    { keys = ":Terminal send line --exec<CR>", note = "--exec presses Enter" },
+    { keys = ":Terminal send line --exec<CR>", note = "--exec presses Enter, in the run terminal" },
     { wait = [[_G.wrote("line.txt", "ran")]], timeout = 8000 },
 
     { lua = [[vim.api.nvim_win_set_cursor(0, { 3, 5 })]] },

@@ -99,18 +99,10 @@ end
 ---Whether terminal `name` shows `word` (plain) at least `times` times (default once).
 ---@param name string
 ---@param word string
----@param times integer|nil
 ---@return boolean
-function _G.shows(name, word, times)
-  local text, count, from = _G.text(name), 0, 1
-  while true do
-    local at = text:find(word, from, true)
-    if not at then
-      break
-    end
-    count, from = count + 1, at + #word
-  end
-  return count >= (times or 1)
+function _G.shows(name, word)
+  -- Without the line ends: a long prompt (the temp path) wraps what is typed behind it at any place.
+  return _G.text(name):gsub("\n", ""):find(word, 1, true) ~= nil
 end
 
 ---Whether the shell has printed its first prompt (it reads what is typed from then on).
