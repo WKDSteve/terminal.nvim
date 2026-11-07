@@ -3,7 +3,7 @@
 return {
   id = "terminal.pin-adopt",
   title = "terminal.nvim: :Terminal pin and :Terminal adopt, against a fake multiplexer",
-  task = "terminal.nvim/testblatt-bindings-checkliste",
+  task = "terminal.nvim/live-check",
   steps = {
     {
       lua = [[dofile(vim.fn.getcwd() .. "/TESTS/sheets/_helpers.lua")

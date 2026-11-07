@@ -2,7 +2,7 @@
 return {
   id = "terminal.list",
   title = "terminal.nvim: :Terminal list opens, closes and sends a line",
-  task = "terminal.nvim/testblatt-bindings-checkliste",
+  task = "terminal.nvim/live-check",
   steps = {
     {
       lua = [[dofile(vim.fn.getcwd() .. "/TESTS/sheets/_helpers.lua")

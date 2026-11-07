@@ -4,7 +4,7 @@
 return {
   id = "terminal.navigate",
   title = "terminal.nvim: <C-h/j/k/l> move between windows, take a count and hand off at the edge",
-  task = "terminal.nvim/testblatt-bindings-checkliste",
+  task = "terminal.nvim/live-check",
   steps = {
     {
       lua = [[dofile(vim.fn.getcwd() .. "/TESTS/sheets/_helpers.lua")
