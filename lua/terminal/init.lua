@@ -683,8 +683,13 @@ local function send_impl(text, opts, at)
     return false, err
   end
   local payload = text
+  local is_windows = require("lib.nvim.cross.platform.is_windows")()
+  if is_windows then
+    -- Enter is CR there: cmd.exe drops an LF, so `a\nb` would run as the one command `ab`.
+    payload = payload:gsub("\r?\n", "\r")
+  end
   if opts.newline then
-    payload = payload .. (require("lib.nvim.cross.platform.is_windows")() and "\r" or "\n")
+    payload = payload .. (is_windows and "\r" or "\n")
   end
   local ok, serr = backend_of(handle).send(handle, payload)
   if not ok then

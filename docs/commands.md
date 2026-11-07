@@ -108,7 +108,7 @@ This is deliberate — a selection that contains a line break would otherwise ru
   The words after `--direct` are the argv.
 - Put `--` before a command that has dashed words of its own: `:Terminal run -- git log --oneline`.
   Everything after the flags (or after the `--`) is passed on verbatim.
-- `send` with several lines needs `--exec` (typing a line break presses Enter, so each line would run);
+- `send` with several lines needs `--exec` (typing a line break presses Enter, so each line would run; on Windows it is sent as CR, the Enter of a shell there);
   a single line is just typed.
 
 ## Lua API

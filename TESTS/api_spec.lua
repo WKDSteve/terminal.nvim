@@ -352,6 +352,32 @@ describe("terminal (facade)", function()
       assert.equals("ls" .. eol(), sent[1].text)
     end)
 
+    it("on Windows every line break of the text is an Enter (CR)", function()
+      local module = "lib.nvim.cross.platform.is_windows"
+      local real = package.loaded[module]
+      package.loaded[module] = function()
+        return true
+      end
+      local sent = jobs.record_sends(function()
+        terminal.send("a\nb\r\nc", { newline = true })
+      end)
+      package.loaded[module] = real
+      assert.equals("a\rb\rc\r", sent[1].text)
+    end)
+
+    it("elsewhere the line breaks of the text stay as they are", function()
+      local module = "lib.nvim.cross.platform.is_windows"
+      local real = package.loaded[module]
+      package.loaded[module] = function()
+        return false
+      end
+      local sent = jobs.record_sends(function()
+        terminal.send("a\nb", { newline = true })
+      end)
+      package.loaded[module] = real
+      assert.equals("a\nb\n", sent[1].text)
+    end)
+
     it("sends to the terminal of the given name", function()
       jobs.record_sends(function()
         terminal.send("x", { name = "repl" })

@@ -101,6 +101,19 @@ function M.record_sends(fn)
   return sent
 end
 
+--- `record_sends` for specs about WHICH lines are sent: the line breaks inside a text read as LF on every
+--- platform (on Windows they go out as CR, the Enter there; api_spec.lua checks that), the last byte stays.
+---@param fn fun()
+---@return { job: integer, text: string }[]
+function M.record_lines(fn)
+  local sent = M.record_sends(fn)
+  for _, entry in ipairs(sent) do
+    local body = entry.text:sub(1, -2):gsub("\r", "\n")
+    entry.text = body .. entry.text:sub(-1)
+  end
+  return sent
+end
+
 --- Run `fn(messages)` with `vim.notify` replaced by a recorder and return what was shown. The
 --- recorder stays in place while `fn` runs, so `fn` can wait for a scheduled message; it is
 --- restored when `fn` ends, also when it raises.
