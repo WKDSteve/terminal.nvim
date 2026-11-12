@@ -6,7 +6,7 @@ What holds in (almost) every shell. `<CR>` on a line types its command into the 
 
 | Key / command | What it does |
 |---|---|
-| `<Esc>` or `<C-c>` | leave terminal mode (scroll, yank, search with `/`) |
+| `<Esc>` | leave terminal mode (scroll, yank, search with `/`); `<C-c>` is not bound and interrupts in the shell |
 | `i` | back into terminal mode |
 | `<C-h>` `<C-j>` `<C-k>` | move to the window left / below / above (hands off to tmux / WezTerm at the edge) |
 | `<A-h>` | show / hide the terminal; `3<A-h>` is terminal "3" |

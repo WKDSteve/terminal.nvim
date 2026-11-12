@@ -104,7 +104,9 @@ local DEFAULTS = {
   keymaps = {
     preset = true,
     toggle = "<A-h>",
-    normal_mode = { "<Esc>", "<C-c>" },
+    -- Only <Esc>: <C-c> stays the shell's own interrupt (it abandons a half-typed line and starts a new
+    -- prompt). Add "<C-c>" to this list to have it leave terminal mode instead.
+    normal_mode = { "<Esc>" },
     -- Off by default: <C-l> reaches the shell and clears the screen there, like in any terminal.
     -- Set a key to have the plugin type `cls` / `clear` for you instead.
     clear = false,

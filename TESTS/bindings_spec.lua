@@ -89,7 +89,6 @@ describe("terminal bindings", function()
       assert.equals(norm("<A-h>"), bound("n", "<A-h>"))
       assert.equals(norm("<A-h>"), bound("t", "<A-h>"))
       assert.equals(norm("<Esc>"), bound("t", "<Esc>"))
-      assert.equals(norm("<C-c>"), bound("t", "<C-c>"))
       for _, lhs in ipairs({ "<C-h>", "<C-j>", "<C-k>" }) do
         assert.equals(norm(lhs), bound("t", lhs))
       end
@@ -149,6 +148,15 @@ describe("terminal bindings", function()
     it("the leave-terminal-mode keys send <C-\\><C-n>", function()
       terminal.setup({ shell = jobs.sleeper() })
       assert.equals(norm("<C-\\><C-n>"), norm(map("t", "<Esc>").rhs))
+    end)
+
+    it("leaves <C-c> to the shell: it interrupts, it does not leave terminal mode", function()
+      terminal.setup({ shell = jobs.sleeper() })
+      assert.same({}, map("t", "<C-c>"), "no terminal-mode map on <C-c>")
+      -- still a choice: listing it binds it again
+      wipe_maps()
+      reload()
+      terminal.setup({ shell = jobs.sleeper(), keymaps = { normal_mode = { "<Esc>", "<C-c>" } } })
       assert.equals(norm("<C-\\><C-n>"), norm(map("t", "<C-c>").rhs))
     end)
 

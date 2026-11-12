@@ -123,7 +123,7 @@ require("terminal").setup({
   keymaps = {
     preset = true,
     toggle = "<A-h>",                      -- normal and terminal mode; a count picks terminal N
-    normal_mode = { "<Esc>", "<C-c>" },    -- terminal mode: leave to Terminal-Normal
+    normal_mode = { "<Esc>" },             -- terminal mode: leave to Terminal-Normal (<C-c> stays the shell's interrupt)
     clear = false,                         -- terminal mode: type cls / clear (off: <C-l> clears in the shell)
     window_left = "<C-h>",                 -- terminal mode: window navigation
     window_down = "<C-j>",

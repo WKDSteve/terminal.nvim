@@ -122,7 +122,8 @@ and adopt also show the message; hide and close only answer.
 4. KEYMAPS                                                   *terminal-keymaps*
 
   <A-h>            normal, terminal   toggle (a count picks terminal N)
-  <Esc>, <C-c>     terminal           leave terminal mode
+  <Esc>            terminal           leave terminal mode (<C-c> reaches the
+                                      shell: it is the interrupt, not a map)
   <C-h/j/k>        terminal           window left/down/up; at Neovim's edge
                                       the multiplexer focuses the next pane
   window_right     terminal           (off) so <C-l> clears in the shell
