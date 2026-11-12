@@ -1,6 +1,7 @@
 -- Bindings checklist: :Terminal cheat, the float of the shell cheatsheet.
 return {
   id = "terminal.cheat",
+  feature = "terminal.cheat",
   title = "terminal.nvim: :Terminal cheat pages, closes and types the line",
   task = "terminal.nvim/testblatt-bindings-checkliste",
   steps = {

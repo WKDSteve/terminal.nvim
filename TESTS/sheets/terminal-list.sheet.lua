@@ -1,6 +1,7 @@
 -- Bindings checklist: :Terminal list, the kit picker of lib.nvim over this project's terminals.
 return {
   id = "terminal.list",
+  feature = "terminal.list",
   title = "terminal.nvim: :Terminal list opens, closes and sends a line",
   task = "terminal.nvim/live-check",
   steps = {

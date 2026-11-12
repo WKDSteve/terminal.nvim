@@ -1,6 +1,7 @@
 -- Bindings checklist: <A-h>, <Esc>, :Terminal, :Terminal toggle|open|hide|close with a real shell.
 return {
   id = "terminal.toggle",
+  feature = "terminal.toggle",
   title = "terminal.nvim: <A-h>, <Esc> and :Terminal toggle, open, hide, close",
   task = "terminal.nvim/testblatt-bindings-checkliste",
   steps = {

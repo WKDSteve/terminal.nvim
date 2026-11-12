@@ -2,6 +2,7 @@
 -- proved by the file it writes into the temp directory of the terminal (the same words in `sh` and `cmd.exe`).
 return {
   id = "terminal.send",
+  feature = "terminal.send",
   title = "terminal.nvim: :Terminal send line, selection, file and :Terminal run",
   task = "terminal.nvim/testblatt-bindings-checkliste",
   steps = {

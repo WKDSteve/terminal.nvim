@@ -3,6 +3,7 @@
 -- multiplexer moves its focus is a person's check.
 return {
   id = "terminal.navigate",
+  feature = "terminal.navigate",
   title = "terminal.nvim: <C-h/j/k/l> move between windows, take a count and hand off at the edge",
   task = "terminal.nvim/live-check",
   steps = {

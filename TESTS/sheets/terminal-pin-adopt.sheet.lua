@@ -2,6 +2,7 @@
 -- rest goes through the fake `wezterm cli` of TESTS/support/fakes.lua. A real pane is a person's check.
 return {
   id = "terminal.pin-adopt",
+  feature = "terminal.pin-adopt",
   title = "terminal.nvim: :Terminal pin and :Terminal adopt, against a fake multiplexer",
   task = "terminal.nvim/live-check",
   steps = {
