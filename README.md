@@ -104,3 +104,20 @@ answers.
 ## License
 
 [MIT](LICENSE)
+
+<!-- connections:begin (written by the app-icons tool of the workshop; change integrations.json there, not this block) -->
+## Connections
+
+![terminal.nvim: what it uses and what uses it](assets/graphs/terminal.nvim.png)
+
+**Uses**
+
+- [lib.nvim](https://github.com/WKDSteve/lib.nvim): the shared base of the plugins.
+
+**Used by**
+
+- [dap.nvim](https://github.com/WKDSteve/dap.nvim): With `terminal.enable`, dap.nvim starts the program of the debug adapter (`runInTerminal`) as a job of a named terminal.nvim terminal (`dap:<configuration name>`). ([picture](assets/graphs/pair/dap.nvim--terminal.nvim.png))
+- [gitsuite.nvim](https://github.com/WKDSteve/gitsuite.nvim): gitsuite.nvim runs lazygit through the facade of terminal.nvim (`terminal.run`) when that is new enough; its own float is the fallback. ([picture](assets/graphs/pair/gitsuite.nvim--terminal.nvim.png))
+- [sandbox.nvim](https://github.com/WKDSteve/sandbox.nvim): sandbox.nvim runs a command in the terminal of terminal.nvim when it is installed (`util.exec_target`). ([picture](assets/graphs/pair/sandbox.nvim--terminal.nvim.png))
+- [testing.nvim](https://github.com/WKDSteve/testing.nvim): testing.nvim runs a command in the terminal of terminal.nvim (`terminal.run`) when that is installed. ([picture](assets/graphs/pair/testing.nvim--terminal.nvim.png))
+<!-- connections:end -->
