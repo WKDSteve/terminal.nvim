@@ -108,8 +108,9 @@ the terminal belongs to the project of that directory (the git root above it;
 without one the project the editor is in when the directory lies in it, else
 the directory itself) and, when it is new, starts there. Without `name`
 and `count` it is named after the folder, by its path below the project root
-(`docs/api`); the project root itself is the default terminal. So a folder has
-one terminal, found again by the folder. It is a terminal of its own, never a
+with a slash at the end (`docs/api/`; a folder `main` is "main/", not the
+default terminal); the project root itself is the default terminal. So a
+folder has one terminal, found again by the folder. It is its own, never a
 `cd` typed into the project's terminal. A relative `dir` is read from the cwd;
 what is not a directory makes the call fail, it is never replaced by the cwd.
 

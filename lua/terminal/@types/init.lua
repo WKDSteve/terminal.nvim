@@ -226,7 +226,7 @@
 ---@field count? number `3` -> terminal "3" (fractions are cut off); 0/nil -> the default name (`send` and `run`: the `run.name` terminal)
 ---@field layout? Terminal.Layout Overrides the configured layout for this call
 ---@field focus? boolean Take focus (default true)
----@field dir? string A directory: the terminal belongs to the project of that directory and, when it is new, starts there. Without `name` and `count` it is named after the folder (its path below the project root; the root itself: the default name). Relative: from the cwd. Not a directory: the call fails
+---@field dir? string A directory: the terminal belongs to the project of that directory and, when it is new, starts there. Without `name` and `count` it is named after the folder (its path below the project root with a slash at the end, `docs/api/`; the root itself: the default name). Relative: from the cwd. Not a directory: the call fails
 
 --- What `summary` reports for a statusline.
 ---@class Terminal.Summary

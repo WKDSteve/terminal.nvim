@@ -90,9 +90,9 @@ end
 ---
 --- The project is the git root above the directory; without one, the project the editor is in when
 --- the directory lies in it, else the directory itself. So a terminal opened for a folder is
---- listed with the other terminals of that project. Its name is the path of
---- the folder below that root (`docs/api`), which is what tells two folders of one project apart;
---- the root itself has no such name (nil: the caller's default applies, so the directory of the
+--- listed with the other terminals of that project. Its name is the path of the folder below that
+--- root with a slash at the end (`docs/api/`), which tells two folders of one project apart and a
+--- folder from a terminal named by default or by count; the root itself has no such name (nil: the caller's default applies, so the directory of the
 --- project is the project's own terminal). The name is taken from the canonical spelling, so every
 --- spelling of one folder (8.3, a symlink, the case of a drive letter) is one terminal.
 ---
@@ -144,11 +144,13 @@ function M.resolve_dir(dir, deps)
   if own ~= root then
     local rest = below(root)
     if rest then
-      folder = rest
+      -- The slash at the end marks a folder name: a folder called `main`, `run` or `3` must not
+      -- be taken for the default terminal, the run terminal or the terminal of a count.
+      folder = rest .. "/"
     else
       -- the root is not above the directory in its canonical spelling (a link out of the
       -- project): the last component still tells the folder from the project's own terminal
-      folder = vim.fs.basename(own)
+      folder = vim.fs.basename(own) .. "/"
     end
   end
   return path, root, folder

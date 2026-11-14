@@ -169,7 +169,7 @@ Without `dir` a terminal starts where the [`cwd` option](configuration.md) puts 
 `dir` names the directory itself:
 
 ```lua
-terminal.open({ dir = "docs/api" })                -- the terminal "docs/api" of this project
+terminal.open({ dir = "docs/api" })                -- the terminal "docs/api/" of this project
 terminal.toggle({ dir = vim.fn.expand("%:p:h") })  -- the terminal of the current file's folder
 terminal.run({ "make", "html" }, { dir = "docs" }) -- typed into the terminal of docs/
 terminal.open({ dir = "docs", name = "build" })    -- the terminal "build", started in docs/
@@ -183,7 +183,9 @@ terminal.open({ dir = "docs", name = "build" })    -- the terminal "build", star
   listed with the other terminals of that project (`:Terminal list`, `list()`), also when the
   editor is somewhere else at the moment.
 - **Which name:** without `name` and `count`, the path of the folder below the project root
-  (`docs/api`), so two folders of one project never share a terminal. The project root itself has
+  with a slash at the end (`docs/api/`). So two folders of one project never share a terminal, and
+  a folder called `main`, `run` or `3` is `main/`, `run/` or `3/`, never the default terminal, the
+  run terminal or the terminal of a count. The project root itself has
   no such name: `{ dir = <project root> }` is the default terminal (for `send` and `run`: the
   `run.name` terminal), the one a call without `dir` means. Every spelling of one folder
   (relative, through a link, an 8.3 short name) is the same terminal.
