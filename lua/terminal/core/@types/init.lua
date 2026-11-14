@@ -37,6 +37,7 @@
 ---@field bufname fun(): string Name of the current buffer ("" when none)
 ---@field root fun(path: string): string|nil Project root for a path, spelled like the path (nil = none found)
 ---@field key? fun(path: string): string The canonical form of a directory, for the registry id (default: as given)
+---@field isdir? fun(path: string): boolean Whether a path is a directory on disk (default: `vim.fn.isdirectory`)
 
 -- ---------------------------------------------------------------------------
 -- core/status.lua

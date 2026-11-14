@@ -108,6 +108,7 @@
 ---@field sessions Terminal.SessionsConfig
 ---@field cheatsheet Terminal.CheatsheetConfig
 ---@field keymaps Terminal.KeymapsConfig
+---@field tree boolean|Terminal.TreeOptions "Terminal here" on a node of a tree view (`terminal.integrations.tree`)
 ---@field commands boolean
 
 ---@class Terminal.FloatOptions
@@ -188,6 +189,9 @@
 ---@class Terminal.RunOptions
 ---@field name? string Name of the terminal `run`/`send` use when none is given.
 
+---@class Terminal.TreeOptions
+---@field key? string|string[]|false Key(s) in the tree buffer (default: none; the action is in the menu)
+
 --- What a user passes to `setup()`: the shape of `Terminal.Config` with every key optional -- a key
 --- that is left out keeps its default. (`Terminal.Config` is the resolved result.)
 ---@class Terminal.Options
@@ -213,6 +217,7 @@
 ---@field sessions? Terminal.SessionsOptions
 ---@field cheatsheet? Terminal.CheatsheetOptions
 ---@field keymaps? Terminal.KeymapsOptions
+---@field tree? boolean|Terminal.TreeOptions "Terminal here" on a node of a tree view: `true` (default) offers it, a table also puts it on a key in the tree buffer, `false` does not offer it
 ---@field commands? boolean
 
 --- Who a call is about: the project root plus a name identify a terminal.
@@ -221,6 +226,7 @@
 ---@field count? number `3` -> terminal "3" (fractions are cut off); 0/nil -> the default name (`send` and `run`: the `run.name` terminal)
 ---@field layout? Terminal.Layout Overrides the configured layout for this call
 ---@field focus? boolean Take focus (default true)
+---@field dir? string A directory: the terminal belongs to the project of that directory and, when it is new, starts there. Without `name` and `count` it is named after the folder (its path below the project root; the root itself: the default name). Relative: from the cwd. Not a directory: the call fails
 
 --- What `summary` reports for a statusline.
 ---@class Terminal.Summary
@@ -259,7 +265,7 @@
 --- require the facade back.
 ---@class Terminal.Host
 ---@field fail fun(err: string|nil) Report a problem to the user
----@field resolve fun(target: Terminal.Target|nil): string|nil, string, string On failure `nil, err`; else name, cwd, root
+---@field resolve fun(target: Terminal.Target|nil, fallback?: string): string|nil, string, string On failure `nil, err`; else name, cwd, root. `fallback`: the name without `name`, `count` and a folder name (default: `default_name`)
 ---@field find_live fun(root: string, name: string): Terminal.Handle|nil
 ---@field backend_of fun(handle: Terminal.Handle): Terminal.Backend
 ---@field multiplexer fun(name: string): Terminal.Backend|nil, string|nil

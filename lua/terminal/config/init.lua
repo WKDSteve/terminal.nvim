@@ -73,6 +73,7 @@ local WIDE_TYPES = {
   ["float.border"] = { "string", "table" },
   ["status.export"] = { "string", "table", "boolean" },
   ["navigate.handoff"] = { "string", "table", "boolean" },
+  tree = { "boolean", "table" },
 }
 
 ---@internal
@@ -275,6 +276,33 @@ DOMAINS["float.border"] = {
     .. table.concat(BORDER_NAMES, ", ")
     .. ") or a list of 1, 2, 4 or 8 pieces, each a one-cell character or { char, hl_group }"
     .. " (a corner set wherever both of its edges are)",
+}
+DOMAINS["tree"] = {
+  ok = function(v)
+    if type(v) == "boolean" then
+      return true
+    end
+    for k in pairs(v) do
+      if k ~= "key" then
+        return false
+      end
+    end
+    local key = v.key
+    if key == nil or key == false then
+      return true
+    elseif type(key) == "string" then
+      return key ~= ""
+    elseif type(key) == "table" and vim.islist(key) then
+      for _, lhs in ipairs(key) do
+        if type(lhs) ~= "string" or lhs == "" then
+          return false
+        end
+      end
+      return true
+    end
+    return false
+  end,
+  want = "true, false or { key = <lhs> | { <lhs>, ... } | false }",
 }
 DOMAINS["window_options.signcolumn"] = {
   ok = function(v)

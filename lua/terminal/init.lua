@@ -194,6 +194,22 @@ function M.setup(opts)
         require("terminal.sessions").setup(config.get_all())
       end,
     },
+    {
+      -- "Terminal here" on a node of a tree view: an entry at lib.nvim's registry, read by
+      -- filetree.nvim's own tree when there is one. `tree = false` leaves it out.
+      "tree",
+      function()
+        local integration = require("terminal.integrations.tree")
+        local tree = config.get("tree")
+        if tree == false then
+          integration.unregister()
+        elseif type(tree) == "table" then
+          integration.register(tree)
+        else
+          integration.register()
+        end
+      end,
+    },
   }
   for _, step in ipairs(steps) do
     local ok, err = pcall(step[2])
@@ -253,41 +269,61 @@ local function check_target(target)
   if target.focus ~= nil and type(target.focus) ~= "boolean" then
     return "target.focus must be a boolean"
   end
+  if target.dir ~= nil and (type(target.dir) ~= "string" or target.dir == "") then
+    return "target.dir must be a non-empty string"
+  end
   return nil
 end
 
 ---@internal
 --- Resolve target name, working directory and project root for one call. A call resolves ONCE and
 --- hands the result on (`Terminal.Resolved`).
+---
+--- With `target.dir` the directory decides all three: the terminal starts there, belongs to the
+--- project of that directory, and (without `name` and `count`) is named after the folder. A
+--- directory per call is a terminal of its own and never a `cd` typed into the project's terminal:
+--- a typed line needs the quoting of whatever shell runs there, lands in whatever program has the
+--- prompt, and moves a terminal the user is working in.
 ---@param target Terminal.Target|nil
+---@param fallback? string The name without `name`, `count` and a folder name (default: `default_name`)
 ---@return string|nil name # nil when the target is invalid
 ---@return string cwd_or_err # The working directory, or the reason the target is invalid
 ---@return string|nil root
-local function resolve(target)
+local function resolve(target, fallback)
   local bad = check_target(target)
   if bad then
     return nil, bad
   end
   target = target or {}
+  local cwd, root, folder
+  if target.dir ~= nil then
+    cwd, root, folder = context.resolve_dir(target.dir, state.deps)
+    if not cwd then
+      return nil, root
+    end
+  else
+    cwd, root = context.resolve(config.get("cwd"), state.deps)
+  end
   local name = target.name
   if not name then
     local nerr
-    name, nerr = context.name_for_count(target.count, config.get("default_name"))
+    name, nerr =
+      context.name_for_count(target.count, folder or fallback or config.get("default_name"))
     if not name then
       return nil, nerr or "invalid count"
     end
   end
-  local cwd, root = context.resolve(config.get("cwd"), state.deps)
   return name, cwd, root
 end
 
 ---@internal
 --- `resolve` into a record, or `nil, err`.
 ---@param target Terminal.Target|nil
+---@param fallback? string See `resolve`
 ---@return Terminal.Resolved|nil
 ---@return string|nil err
-local function resolved(target)
-  local name, cwd, root = resolve(target)
+local function resolved(target, fallback)
+  local name, cwd, root = resolve(target, fallback)
   if not name then
     return nil, cwd
   end
@@ -707,19 +743,6 @@ local function send_impl(text, opts, at)
   return true, nil
 end
 
----@internal
---- A target for `send`/`run`: the caller's options, the `run.name` terminal when no name or count
---- is given.
----@param opts Terminal.Target
----@return Terminal.Target
-local function with_run_name(opts)
-  if opts.name == nil and (opts.count == nil or opts.count == 0) then
-    -- 0 is what `vim.v.count` is without a count: the run terminal, like no count at all
-    return vim.tbl_extend("force", opts, { name = config.get("run.name") })
-  end
-  return opts
-end
-
 --- Send text to a terminal as typed input. Nothing is executed unless `newline` is true (or the
 --- text itself ends in a line ending). The terminal is created when it does not exist yet.
 ---@param text string
@@ -739,7 +762,8 @@ function M.send(text, opts)
   end
   opts = opts or {}
   backend()
-  local at, rerr = resolved(with_run_name(opts))
+  -- no name, no count (0 is what `vim.v.count` is without one), no folder: the run terminal
+  local at, rerr = resolved(opts, config.get("run.name"))
   if not at then
     fail(rerr)
     return false, rerr
@@ -918,7 +942,8 @@ function M.run(cmd, opts)
   end
   opts = opts or {}
   local b = backend()
-  local at, rerr = resolved(with_run_name(opts))
+  -- no name, no count (0 is what `vim.v.count` is without one), no folder: the run terminal
+  local at, rerr = resolved(opts, config.get("run.name"))
   if not at then
     fail(rerr)
     return false, rerr

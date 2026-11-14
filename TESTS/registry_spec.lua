@@ -179,6 +179,151 @@ describe("terminal.core.context", function()
       assert.equals("/w/proj", root)
     end)
   end)
+
+  describe("a directory named by the caller (resolve_dir)", function()
+    ---@param cwd string
+    ---@param root string|nil
+    ---@param dirs string[] The directories that exist
+    local function dir_deps(cwd, root, dirs)
+      local d = deps(cwd, "", root)
+      d.isdir = function(path)
+        return vim.list_contains(dirs, path)
+      end
+      return d
+    end
+
+    it(
+      "a folder below the project starts there, belongs to the project, is named by its path",
+      function()
+        local cwd, root, folder = context.resolve_dir(
+          "/w/proj/docs/api",
+          dir_deps("/w/cwd", "/w/proj", { "/w/proj/docs/api" })
+        )
+        assert.equals("/w/proj/docs/api", cwd)
+        assert.equals("/w/proj", root)
+        assert.equals("docs/api", folder)
+      end
+    )
+
+    it("the project root itself has no folder name: it is the project's own terminal", function()
+      local cwd, root, folder =
+        context.resolve_dir("/w/proj", dir_deps("/w/cwd", "/w/proj", { "/w/proj" }))
+      assert.equals("/w/proj", cwd)
+      assert.equals("/w/proj", root)
+      assert.is_nil(folder)
+    end)
+
+    it("without a project above it the directory is its own project", function()
+      local cwd, root, folder =
+        context.resolve_dir("/w/plain/sub", dir_deps("/w/cwd", nil, { "/w/plain/sub" }))
+      assert.equals("/w/plain/sub", cwd)
+      assert.equals("/w/plain/sub", root)
+      assert.is_nil(folder)
+    end)
+
+    it("without a git root a folder of the editor's project belongs to that project", function()
+      local d = dir_deps("/w/plain", nil, { "/w/plain", "/w/plain/sub/deep" })
+      local cwd, root, folder = context.resolve_dir("/w/plain/sub/deep", d)
+      assert.equals("/w/plain/sub/deep", cwd)
+      assert.equals("/w/plain", root)
+      assert.equals("sub/deep", folder)
+      cwd, root, folder = context.resolve_dir("/w/plain", d)
+      assert.equals("/w/plain", cwd)
+      assert.equals("/w/plain", root)
+      assert.is_nil(folder)
+      -- a name that only starts like the project is not below it
+      d = dir_deps("/w/plain", nil, { "/w/plain-other" })
+      cwd, root, folder = context.resolve_dir("/w/plain-other", d)
+      assert.equals("/w/plain-other", cwd)
+      assert.equals("/w/plain-other", root)
+      assert.is_nil(folder)
+    end)
+
+    it(
+      "a relative directory is read from the cwd, `..` and a trailing slash are resolved",
+      function()
+        local d = dir_deps("/w/proj", "/w/proj", { "/w/proj/docs", "/w/proj/lua" })
+        local cwd, _, folder = context.resolve_dir("docs", d)
+        assert.equals("/w/proj/docs", cwd)
+        assert.equals("docs", folder)
+        cwd, _, folder = context.resolve_dir("docs/../lua/", d)
+        assert.equals("/w/proj/lua", cwd)
+        assert.equals("lua", folder)
+        cwd, _, folder = context.resolve_dir("\\w\\proj\\docs", d)
+        assert.equals("/w/proj/docs", cwd)
+        assert.equals("docs", folder)
+      end
+    )
+
+    it("a `$` in the name is a character of the name, not a variable", function()
+      vim.env.TERMINAL_SPEC_DIR = "/elsewhere"
+      local cwd, _, folder = context.resolve_dir(
+        "/w/proj/$TERMINAL_SPEC_DIR",
+        dir_deps("/w/cwd", "/w/proj", { "/w/proj/$TERMINAL_SPEC_DIR" })
+      )
+      vim.env.TERMINAL_SPEC_DIR = nil
+      assert.equals("/w/proj/$TERMINAL_SPEC_DIR", cwd)
+      assert.equals("$TERMINAL_SPEC_DIR", folder)
+    end)
+
+    it(
+      "what is not a directory is refused and named as it was given, never replaced by the cwd",
+      function()
+        local cwd, err = context.resolve_dir("nope", dir_deps("/w/proj", "/w/proj", { "/w/proj" }))
+        assert.is_nil(cwd)
+        assert.equals("target.dir is not a directory: nope", err)
+      end
+    )
+
+    it("what is no path at all is refused", function()
+      for _, bad in ipairs({ "", 3, {}, true }) do
+        local cwd, err = context.resolve_dir(bad, dir_deps("/w/proj", "/w/proj", { "/w/proj" }))
+        assert.is_nil(cwd, vim.inspect(bad))
+        assert.equals("target.dir must be a non-empty string", err)
+      end
+    end)
+
+    it(
+      "the key and the name are canonical, the start directory is the caller's spelling",
+      function()
+        local d = dir_deps("/w/cwd", "/link/proj", { "/link/proj/src", "/real/proj/src" })
+        d.key = function(path)
+          return (path:gsub("^/link/", "/real/"))
+        end
+        local cwd, root, folder = context.resolve_dir("/link/proj/src", d)
+        assert.equals("/link/proj/src", cwd)
+        assert.equals("/real/proj", root)
+        assert.equals("src", folder)
+        -- the other spelling of the same folder is the same terminal
+        d.root = function()
+          return "/real/proj"
+        end
+        local _, root2, folder2 = context.resolve_dir("/real/proj/src", d)
+        assert.equals(root, root2)
+        assert.equals(folder, folder2)
+      end
+    )
+
+    it("a project at the filesystem root names its folders without a leading slash", function()
+      local _, root, folder = context.resolve_dir("/docs/api", dir_deps("/", "/", { "/docs/api" }))
+      assert.equals("/", root)
+      assert.equals("docs/api", folder)
+      _, root, folder = context.resolve_dir("C:/docs", dir_deps("C:/", "C:/", { "C:/docs" }))
+      assert.equals("C:/", root)
+      assert.equals("docs", folder)
+    end)
+
+    it("a folder whose real path leaves the project is named by its last component", function()
+      local d = dir_deps("/w/cwd", "/w/proj", { "/w/proj/out" })
+      d.key = function(path)
+        return (path:gsub("^/w/proj/out", "/elsewhere/build"))
+      end
+      local cwd, root, folder = context.resolve_dir("/w/proj/out", d)
+      assert.equals("/w/proj/out", cwd)
+      assert.equals("/w/proj", root)
+      assert.equals("build", folder)
+    end)
+  end)
 end)
 
 describe("terminal.backends", function()

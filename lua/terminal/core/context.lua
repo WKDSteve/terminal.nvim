@@ -34,14 +34,18 @@ function M.from_editor()
       return vim.fs.root(start, { ".git" })
     end,
     key = canonical,
+    isdir = function(path)
+      return vim.fn.isdirectory(path) == 1
+    end,
   }
 end
 
 ---@internal
 ---@param p string
+---@param literal? boolean `true`: a `$NAME` in the path is a name on disk, not a variable to expand
 ---@return string
-local function normalize(p)
-  local out = vim.fs.normalize(p):gsub("/+$", "")
+local function normalize(p, literal)
+  local out = vim.fs.normalize(p, { expand_env = not literal }):gsub("/+$", "")
   -- A filesystem root loses its only slash above: "/" -> "", "C:/" -> "C:" (a drive-relative path).
   if out == "" then
     return "/"
@@ -79,6 +83,75 @@ function M.resolve(mode, deps)
     return buf_dir or cwd, root
   end
   return top, root
+end
+
+--- A directory named by the caller (`Terminal.Target.dir`): where the terminal starts, the project
+--- it belongs to, and the name it gets when the caller gave none.
+---
+--- The project is the git root above the directory; without one, the project the editor is in when
+--- the directory lies in it, else the directory itself. So a terminal opened for a folder is
+--- listed with the other terminals of that project. Its name is the path of
+--- the folder below that root (`docs/api`), which is what tells two folders of one project apart;
+--- the root itself has no such name (nil: the caller's default applies, so the directory of the
+--- project is the project's own terminal). The name is taken from the canonical spelling, so every
+--- spelling of one folder (8.3, a symlink, the case of a drive letter) is one terminal.
+---
+--- A relative directory is read from the cwd; `~` is the home directory; a `$` is a character of
+--- the name. What is not a directory on disk is refused, never replaced by the cwd.
+---@param dir any
+---@param deps Terminal.ContextDeps
+---@return string|nil cwd # nil: `root_or_err` is the reason
+---@return string root_or_err
+---@return string|nil folder # Name for the terminal; nil: the directory is the project root
+function M.resolve_dir(dir, deps)
+  if type(dir) ~= "string" or dir == "" then
+    return nil, "target.dir must be a non-empty string"
+  end
+  local path = normalize(dir, true)
+  if not (path:find("^/") or path:find("^%a:/")) then
+    path = normalize(vim.fs.joinpath(normalize(deps.cwd()), path), true)
+  end
+  local isdir = deps.isdir or function(p)
+    return vim.fn.isdirectory(p) == 1
+  end
+  if not isdir(path) then
+    return nil, ("target.dir is not a directory: %s"):format(dir)
+  end
+
+  local key = deps.key or function(p)
+    return p
+  end
+  local own = normalize(key(path), true)
+  ---@param root string
+  ---@return string|nil rest # The path of `own` below `root`; nil: not below it
+  local function below(root)
+    local prefix = root:sub(-1) == "/" and root or (root .. "/")
+    return own:sub(1, #prefix) == prefix and own:sub(#prefix + 1) or nil
+  end
+
+  local root
+  local top = deps.root(path)
+  if top then
+    root = normalize(key(normalize(top, true)), true)
+  else
+    -- No project above the directory. A folder of the project the editor is in belongs to that
+    -- project (a tree without git still has one list of terminals); any other is its own.
+    local _, current = M.resolve("project", deps)
+    root = (own == current or below(current)) and current or own
+  end
+
+  local folder = nil
+  if own ~= root then
+    local rest = below(root)
+    if rest then
+      folder = rest
+    else
+      -- the root is not above the directory in its canonical spelling (a link out of the
+      -- project): the last component still tells the folder from the project's own terminal
+      folder = vim.fs.basename(own)
+    end
+  end
+  return path, root, folder
 end
 
 --- The name a terminal gets when the caller gave none: the configured default for no count,

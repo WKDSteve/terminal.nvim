@@ -156,6 +156,12 @@ local DEFAULTS = {
     shells = {},
   },
 
+  -- "Terminal here" on a node of a tree view (the own tree of filetree.nvim reads it from
+  -- lib.nvim's registry): a terminal that starts in the folder of the node. true: in the tree's
+  -- menu and action list; { key = "<leader>t" }: on that key in the tree buffer as well; false:
+  -- not offered.
+  tree = true,
+
   commands = true,
 }
 

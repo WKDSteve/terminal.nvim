@@ -142,6 +142,12 @@ require("terminal").setup({
     timeout_ms = 2000,      -- how long the hand-off command may run before it is stopped
   },
 
+  -- "Terminal here" on a file or folder of a tree view (the own tree of filetree.nvim reads it
+  -- from lib.nvim's registry): the terminal of the node's folder, see commands.md. true: in the
+  -- tree's menu and action list. { key = "<leader>t" }: on that key in the tree buffer as well
+  -- (a string or a list of keys). false: not offered.
+  tree = true,
+
   commands = true,          -- register :Terminal
 })
 ```

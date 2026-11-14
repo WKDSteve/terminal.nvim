@@ -590,6 +590,8 @@ describe("terminal (facade)", function()
         { { name = 3 }, "target.name must be a non-empty string" },
         { { layout = "diagonal" }, "unknown layout" },
         { { focus = "yes" }, "target.focus must be a boolean" },
+        { { dir = "" }, "target.dir must be a non-empty string" },
+        { { dir = 3 }, "target.dir must be a non-empty string" },
         { { count = "3" }, "count must be a number from 1 up" },
         { { count = -2 }, "count must be a number from 1 up" },
       }
@@ -786,6 +788,198 @@ describe("terminal (facade)", function()
       local a = terminal.open()
       local b = terminal.list()[1]
       assert.equals(a, b)
+    end)
+  end)
+
+  describe("a directory per call (target.dir)", function()
+    local base, project, docs, api_dir, saved_cwd
+
+    ---@return string[]
+    local function names(all)
+      local out = vim.tbl_map(function(h)
+        return h.name
+      end, terminal.list(all))
+      table.sort(out)
+      return out
+    end
+
+    before_each(function()
+      saved_cwd = vim.fn.getcwd()
+      base = vim.fs.normalize(vim.fn.tempname() .. "-terminal-dir")
+      project = base .. "/proj"
+      docs = project .. "/docs"
+      api_dir = docs .. "/api"
+      vim.fn.mkdir(project .. "/.git", "p")
+      vim.fn.mkdir(api_dir, "p")
+      vim.fn.writefile({ "x" }, docs .. "/guide.md")
+      vim.cmd("cd " .. vim.fn.fnameescape(project))
+    end)
+
+    after_each(function()
+      -- The terminals of this block belong to `project`: close them from inside it, before the
+      -- cwd goes back (the outer after_each closes by name in the project it is in).
+      vim.cmd("cd " .. vim.fn.fnameescape(project))
+      for _, h in ipairs(terminal.list(true)) do
+        jobs.settle()
+        terminal.close({ name = h.name })
+      end
+      vim.cmd("cd " .. vim.fn.fnameescape(saved_cwd))
+      vim.fn.delete(base, "rf")
+    end)
+
+    it("open starts a terminal in the folder, named after it, in the folder's project", function()
+      local started_in
+      local jobstart = vim.fn.jobstart
+      -- Test double: record the options jobstart is given; restored below.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.fn.jobstart = function(command, job_opts)
+        started_in = job_opts and job_opts.cwd
+        return jobstart(command, job_opts)
+      end
+      local h, err = terminal.open({ dir = docs, focus = false })
+      -- Restore the original.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.fn.jobstart = jobstart
+      assert.is_not_nil(h, err)
+      assert.equals("docs", h.name)
+      assert.equals(docs, h.cwd, "the terminal remembers the folder")
+      assert.equals(docs, started_in, "the job starts in the folder")
+      local main = terminal.open({ focus = false })
+      assert.equals(main.root, h.root, "it belongs to the project of the folder")
+      assert.same({ "docs", "main" }, names())
+    end)
+
+    it("a folder deeper down is named by its path below the project root", function()
+      local h = terminal.open({ dir = api_dir, focus = false })
+      assert.equals("docs/api", h.name)
+      assert.equals(api_dir, h.cwd)
+    end)
+
+    it("the same folder is the same terminal, however it is spelled", function()
+      local a = terminal.open({ dir = docs, focus = false })
+      local b = terminal.open({ dir = "docs", focus = false })
+      local c = terminal.open({ dir = docs .. "/api/..", focus = false })
+      assert.equals(a.id, b.id)
+      assert.equals(a.id, c.id)
+      assert.equals(1, #terminal.list())
+    end)
+
+    it("the project root as the directory is the project's own terminal", function()
+      local main = terminal.open({ focus = false })
+      local same = terminal.open({ dir = project, focus = false })
+      assert.equals("main", same.name)
+      assert.equals(main.id, same.id)
+    end)
+
+    it("a name or a count still names the terminal; the directory is where it starts", function()
+      local named = terminal.open({ dir = docs, name = "build", focus = false })
+      assert.equals("build", named.name)
+      assert.equals(docs, named.cwd)
+      local counted = terminal.open({ dir = api_dir, count = 3, focus = false })
+      assert.equals("3", counted.name)
+      assert.equals(api_dir, counted.cwd)
+    end)
+
+    it("from outside the project the terminal still belongs to the folder's project", function()
+      vim.cmd("cd " .. vim.fn.fnameescape(base))
+      local h = terminal.open({ dir = docs, focus = false })
+      assert.equals("docs", h.name)
+      assert.equals(0, #terminal.list(), "not a terminal of the directory the editor is in")
+      assert.same({ "docs" }, names(true))
+      vim.cmd("cd " .. vim.fn.fnameescape(project))
+      assert.same({ "docs" }, names())
+    end)
+
+    it(
+      "toggle creates the folder's terminal, then hides it; hide and close find it by the folder",
+      function()
+        assert.is_true(terminal.toggle({ dir = docs }))
+        local h = terminal.list()[1]
+        assert.equals("docs", h.name)
+        assert.equals(1, #vim.fn.win_findbuf(h.bufnr))
+        jobs.settle()
+        assert.is_true(terminal.toggle({ dir = docs })) -- focused -> hide
+        assert.equals(0, #vim.fn.win_findbuf(h.bufnr))
+        jobs.settle()
+        assert.is_true(terminal.toggle({ dir = docs })) -- hidden -> show
+        assert.equals(1, #vim.fn.win_findbuf(h.bufnr))
+        jobs.settle()
+        assert.is_true(terminal.hide({ dir = docs }))
+        jobs.settle()
+        assert.is_true(terminal.close({ dir = docs }))
+        assert.equals(0, #terminal.list(true))
+      end
+    )
+
+    it("what is not a directory is refused with a reason and starts nothing", function()
+      local cases = {
+        { base .. "/nope", "target.dir is not a directory" },
+        { docs .. "/guide.md", "target.dir is not a directory" },
+        { "", "target.dir must be a non-empty string" },
+        { 3, "target.dir must be a non-empty string" },
+      }
+      for _, case in ipairs(cases) do
+        local target = { dir = case[1] }
+        local handle, err = terminal.open(target)
+        assert.is_nil(handle, vim.inspect(target))
+        assert.truthy(err:find(case[2], 1, true), vim.inspect(target) .. ": " .. tostring(err))
+        local ok, terr = terminal.toggle(target)
+        assert.is_false(ok)
+        assert.equals(err, terr)
+        local sent, serr = terminal.send("ls", target)
+        assert.is_false(sent)
+        assert.equals(err, serr)
+        local ran, rerr = terminal.run({ "ls" }, target)
+        assert.is_false(ran)
+        assert.equals(err, rerr)
+        local closed, cerr = terminal.close(target)
+        assert.is_false(closed)
+        assert.equals(err, cerr)
+      end
+      assert.equals(0, #terminal.list(true), "no terminal in the cwd instead")
+      vim.wait(100, function()
+        return false
+      end)
+      local shown = false
+      for _, n in ipairs(notices) do
+        if n.msg:find("target.dir is not a directory: " .. base .. "/nope", 1, true) then
+          shown = true
+        end
+      end
+      assert.is_true(shown, "the user is told which directory it was")
+    end)
+
+    it("run types its line into the folder's terminal, not into the run terminal", function()
+      local ok, err
+      local sent = jobs.record_sends(function()
+        ok, err = terminal.run({ "echo", "x" }, { dir = docs })
+      end)
+      assert.is_true(ok, err)
+      assert.same({ "docs" }, names())
+      local h = terminal.list()[1]
+      assert.equals(docs, h.cwd)
+      assert.equals(h.job, sent[1].job)
+      assert.equals("echo x" .. (vim.fn.has("win32") == 1 and "\r" or "\n"), sent[1].text)
+    end)
+
+    it("send and run with the project root as the directory use the run terminal", function()
+      jobs.record_sends(function()
+        assert.is_true(terminal.send("x", { dir = project }))
+        assert.is_true(terminal.run("y", { dir = project, count = 0 }))
+      end)
+      assert.same({ "run" }, names())
+    end)
+
+    it("run with direct starts the job in the folder; an explicit cwd wins", function()
+      local ok, err, h = terminal.run(jobs.sleeper(), { direct = true, dir = docs, focus = false })
+      assert.is_true(ok, err)
+      assert.equals("docs", h.name)
+      assert.equals(docs, h.cwd)
+      local _, _, other = terminal.run(
+        jobs.sleeper(),
+        { direct = true, dir = docs, name = "other", cwd = api_dir, focus = false }
+      )
+      assert.equals(api_dir, other.cwd)
     end)
   end)
 

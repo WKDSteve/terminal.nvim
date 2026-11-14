@@ -13,9 +13,10 @@ the plugin manager's folder) and exits non-zero when anything is missing or red.
 |---|---|
 | `config_spec.lua` | defaults, merge, validation (event names included) |
 | `layout_spec.lua` | pure window geometry |
-| `registry_spec.lua` | registry, project/name resolution, backend detection |
+| `registry_spec.lua` | registry, project/name resolution (also for a directory named by the caller, `resolve_dir`), backend detection |
 | `native_spec.lua` | the native backend on real windows and jobs |
-| `api_spec.lua` | the public facade on the native backend |
+| `api_spec.lua` | the public facade on the native backend; a directory per call (`target.dir`: the folder's terminal, its name and project, every spelling one terminal, what is not a directory refused) |
+| `tree_action_spec.lua` | the action `terminal.here` at `lib.nvim.tree.registry`: what `setup()` registers (the `tree` option, key, `false`, values that are refused), the folder a node stands for, a real terminal started there and found again |
 | `bindings_spec.lua` | keymaps, autocommands, `:Terminal` |
 | `usrcmds_help_spec.lua` | every `:Terminal` flag has a one-line description for the option float; the layout texts hold for tmux/WezTerm too, and no text names a key |
 | `status_spec.lua` | the status dataset, escape sequences, exporters, the delta gate, UI attach |

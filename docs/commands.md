@@ -117,6 +117,7 @@ This is deliberate — a selection that contains a line break would otherwise ru
 local terminal = require("terminal")
 terminal.toggle({ name = "build", layout = "vsplit" })
 terminal.open({ count = 3, focus = false })
+terminal.open({ dir = "docs/api" })  -- the terminal of that folder, see "A directory per call"
 terminal.hide(); terminal.close({ name = "build" })
 terminal.list()          -- this project's terminals; list(true) for all
 terminal.names()         -- their names, straight from the registry (no multiplexer is asked)
@@ -148,7 +149,8 @@ number from 0 up.
   anything is stopped: a refused terminal is still running, still registered and can be closed again
   later. The `:Terminal hide|close` command shows the reason.
 - A target must be a table with a non-empty string `name`, a `layout` of `float`, `split`, `vsplit`
-  or `tab`, a boolean `focus`, and a `count` that is a number from 1 up (a fraction is cut off: `3.9`
+  or `tab`, a boolean `focus`, a `dir` that is a directory on disk (see
+  [A directory per call](#a-directory-per-call)), and a `count` that is a number from 1 up (a fraction is cut off: `3.9`
   is terminal `"3"`; `0` or `nil` mean the default terminal; `count` is ignored when `name` is given);
   anything else fails with that reason and starts nothing. For `send` and `run` a `count` of `0` or
   `nil` means the `run.name` terminal.
@@ -160,6 +162,57 @@ number from 0 up.
   not copies: read them, do not write to them.
 - A throwing `on_open` or `on_exit` callback is reported (`run: on_exit failed: ...`) and does not
   take the terminal with it.
+
+## A directory per call
+
+Without `dir` a terminal starts where the [`cwd` option](configuration.md) puts it. A target with
+`dir` names the directory itself:
+
+```lua
+terminal.open({ dir = "docs/api" })                -- the terminal "docs/api" of this project
+terminal.toggle({ dir = vim.fn.expand("%:p:h") })  -- the terminal of the current file's folder
+terminal.run({ "make", "html" }, { dir = "docs" }) -- typed into the terminal of docs/
+terminal.open({ dir = "docs", name = "build" })    -- the terminal "build", started in docs/
+```
+
+- **A directory is a terminal of its own**, not a `cd` typed into the project's terminal. A typed
+  line would need the quoting of whatever shell runs there, would land in whatever program has the
+  prompt, and would move a terminal you are working in.
+- **Which project:** the git root above the directory; without one, the project the editor is in
+  when the directory lies in it, else the directory itself. The terminal is
+  listed with the other terminals of that project (`:Terminal list`, `list()`), also when the
+  editor is somewhere else at the moment.
+- **Which name:** without `name` and `count`, the path of the folder below the project root
+  (`docs/api`), so two folders of one project never share a terminal. The project root itself has
+  no such name: `{ dir = <project root> }` is the default terminal (for `send` and `run`: the
+  `run.name` terminal), the one a call without `dir` means. Every spelling of one folder
+  (relative, through a link, an 8.3 short name) is the same terminal.
+- **When it applies:** the directory is where a *new* terminal starts. A terminal that already
+  exists under that name is shown as it is, wherever its shell has gone since.
+- `hide`, `close`, `send` and `run` find the terminal the same way. With `direct = true` the job
+  starts in `dir`; `cwd`, when given as well, wins.
+- A relative `dir` is read from the cwd, `~` is the home directory, and a `$` is a character of
+  the name. What is not a directory (a file, a path that does not exist) makes the call fail with
+  `target.dir is not a directory: <dir>`; it is never replaced by the cwd.
+
+### "Terminal here" in a tree view
+
+`setup()` registers the action `terminal.here` at `lib.nvim.tree.registry`. A tree that reads the
+registry (the own tree of [filetree.nvim](https://github.com/WKDSteve/filetree.nvim), `adapter =
+"native"`) offers it on every node that is a file or a folder on disk, in its context menu and its
+action list. It runs `open({ dir = ... })` with the folder of the node (a file means the folder it
+lies in), so the same node again shows the terminal that is already there. With several nodes
+marked it opens the terminal of the first and says so.
+
+```lua
+require("terminal").setup({
+  tree = { key = "<leader>t" }, -- also on a key in the tree buffer
+  -- tree = false,              -- not offered
+})
+```
+
+Without a tree that reads the registry the entry is never looked at.
+`require("terminal.integrations.tree").open_at(path)` does the same for any file or folder.
 
 ## Running a TUI from another plugin
 

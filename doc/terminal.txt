@@ -82,6 +82,7 @@ to 9.
   terminal.setup(opts)
   terminal.toggle({ name = "build", layout = "vsplit" })
   terminal.open({ count = 3, focus = false })
+  terminal.open({ dir = "docs/api" })   the terminal of that folder
   terminal.hide(target)    terminal.close(target)
   terminal.list(all)
   terminal.names(all)
@@ -100,6 +101,25 @@ to 9.
 
 An argv list given to run() is quoted for the terminal's shell; a string is
 typed as given.
+
+                                                               *terminal-dir*
+A target with `dir` (open, toggle, hide, close, send, run) names a directory:
+the terminal belongs to the project of that directory (the git root above it;
+without one the project the editor is in when the directory lies in it, else
+the directory itself) and, when it is new, starts there. Without `name`
+and `count` it is named after the folder, by its path below the project root
+(`docs/api`); the project root itself is the default terminal. So a folder has
+one terminal, found again by the folder. It is a terminal of its own, never a
+`cd` typed into the project's terminal. A relative `dir` is read from the cwd;
+what is not a directory makes the call fail, it is never replaced by the cwd.
+
+                                                              *terminal-tree*
+`setup()` registers the action `terminal.here` at `lib.nvim.tree.registry`:
+"Terminal here". The own tree of filetree.nvim (`adapter = "native"`) offers
+it on every file and folder, in its context menu and its action list; it opens
+the terminal of the node's folder (a file means the folder it lies in).
+`tree = { key = "<leader>t" }` also puts it on a key in the tree buffer,
+`tree = false` does not offer it.
 
 names([all])        The names of this project's terminals (all projects with
                     `all = true`), straight from the registry: no multiplexer

@@ -76,4 +76,6 @@ require("terminal").setup({
   terminals back into a session saved later under that name.
 - A load that did not bring a terminal back as saved (*Skip*, an unanswered prompt, a failed start, or a command replaced by a plain shell) keeps its definition for the rest of this Neovim run: the next save writes it again next to the live terminals, so it is not lost on a machine that cannot start it. A live terminal of the same name wins. The kept definitions are forgotten when Neovim exits; they stay in the sidecar until a save in a run that did not load that session overwrites it.
 - The directory of a `run` with `direct` is restored; a plain shell starts where the `cwd` option
-  puts it (`project` by default), which for a session of one project is the same place.
+  puts it (`project` by default), which for a session of one project is the same place. That
+  holds for a terminal that was opened for a folder as well (`open({ dir = ... })`, "Terminal
+  here"): it comes back under its name, in the project's directory.

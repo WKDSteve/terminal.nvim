@@ -18,8 +18,10 @@
 
 > Built on [lib.nvim](https://github.com/WKDSteve/lib.nvim) — keymaps, autocommands,
 > the `:Terminal` command and notifications all come from it. Pairs well with
-> [sessions.nvim](https://github.com/WKDSteve/sessions.nvim) and
-> [ui.nvim](https://github.com/WKDSteve/ui.nvim).
+> [sessions.nvim](https://github.com/WKDSteve/sessions.nvim),
+> [ui.nvim](https://github.com/WKDSteve/ui.nvim) and
+> [filetree.nvim](https://github.com/WKDSteve/filetree.nvim), whose own tree offers
+> ["Terminal here"](docs/commands.md#terminal-here-in-a-tree-view) on a file or a folder.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Neovim](https://img.shields.io/badge/Neovim-0.11%2B-57A143?logo=neovim&logoColor=white)](https://neovim.io)
