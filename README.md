@@ -120,4 +120,5 @@ answers.
 - [gitsuite.nvim](https://github.com/WKDSteve/gitsuite.nvim): gitsuite.nvim runs lazygit through the facade of terminal.nvim (`terminal.run`) when that is new enough; its own float is the fallback. ([picture](assets/graphs/pair/gitsuite.nvim--terminal.nvim.png))
 - [sandbox.nvim](https://github.com/WKDSteve/sandbox.nvim): sandbox.nvim runs a command in the terminal of terminal.nvim when it is installed (`util.exec_target`). ([picture](assets/graphs/pair/sandbox.nvim--terminal.nvim.png))
 - [testing.nvim](https://github.com/WKDSteve/testing.nvim): testing.nvim runs a command in the terminal of terminal.nvim (`terminal.run`) when that is installed. ([picture](assets/graphs/pair/testing.nvim--terminal.nvim.png))
+- [ui.nvim](https://github.com/WKDSteve/ui.nvim): The statusline module `terminal_count` of ui.nvim shows the terminals of terminal.nvim, once terminal.nvim is loaded. ([picture](assets/graphs/pair/ui.nvim--terminal.nvim.png))
 <!-- connections:end -->
