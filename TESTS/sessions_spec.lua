@@ -42,16 +42,11 @@ describe("terminal.sessions (definitions and a fake facade)", function()
         if fail_for[target.name] then
           return nil, "no way"
         end
-        local handle = { name = target.name, dir = target.dir }
-        -- A directory named in `elsewhere` lies in another project: not in this project's list.
-        if not (target.dir and elsewhere[target.dir]) then
-          handles[#handles + 1] = handle
-        end
-        return handle
+        return { name = target.name, dir = target.dir }
       end,
-      close = function(target)
-        calls[#calls + 1] = { "close", target.name, target.dir }
-        return true
+      -- A directory named in `elsewhere` lies in another project.
+      in_project = function(d)
+        return not elsewhere[d]
       end,
       run = function(cmd, opts)
         calls[#calls + 1] = { "run", opts.name, table.concat(cmd, " "), opts.cwd, opts.direct }
@@ -341,17 +336,16 @@ describe("terminal.sessions (definitions and a fake facade)", function()
       assert.truthy(result.moved[1]:find("gone/: " .. gone .. " (is gone)", 1, true))
     end)
 
-    it("a shell whose directory is another project's now is closed there, opened here", function()
+    it("a shell whose directory is another project's now opens here, nothing there", function()
       local calls = {}
       local result = sessions.restore(fake({}, calls, nil, { [dir] = true }), {
         { name = "sh", layout = "split", cwd = dir },
       }, true)
       assert.equals(1, result.opened)
-      assert.same({ "open", "sh", "split", false }, calls[1])
-      assert.same({ "close", "sh", dir }, calls[2])
-      assert.same({ "open", "sh", "split", false }, calls[3])
+      -- One open, without `dir`: nothing is opened (or shown) in the other project.
+      assert.same({ { "open", "sh", "split", false }, { "hide", "sh" } }, { calls[1], calls[2] })
+      assert.is_nil(calls[3])
       assert.is_nil(calls.open_targets.sh.dir)
-      assert.same({ "hide", "sh" }, calls[4])
       assert.truthy(result.moved[1]:find("another project", 1, true))
     end)
 
@@ -905,6 +899,41 @@ describe("terminal.sessions (the User events, on the real facade)", function()
       assert.equals("docs/", h.name)
       assert.equals(docs, vim.fs.normalize(h.cwd))
       assert.same({}, vim.fn.win_findbuf(h.bufnr), "it comes back hidden")
+    end)
+
+    it("in_project tells a folder of the project from one of another project", function()
+      boot()
+      local sessions = require("terminal.sessions")
+      vim.fn.mkdir(dir .. "/other/.git", "p")
+      assert.is_true(sessions.in_project(dir .. "/proj/docs"))
+      assert.is_true(sessions.in_project(dir .. "/proj"))
+      assert.is_false(sessions.in_project(dir .. "/other"))
+    end)
+
+    it("whose folder is another project's now leaves that project's terminal alone", function()
+      boot()
+      local session = dir .. "/work.vim"
+      local other = vim.fs.normalize(dir .. "/other")
+      vim.fn.mkdir(other .. "/.git", "p")
+      local sidecar = require("terminal.sessions").sidecar_path(session)
+      local f = assert(io.open(sidecar, "w"))
+      f:write(vim.json.encode({
+        version = 1,
+        terminals = { { name = "sh", layout = "float", cwd = other } },
+      }))
+      f:close()
+      -- The other project has a terminal of that name, open in a window.
+      local theirs = assert(terminal.open({ name = "sh", dir = other, layout = "split" }))
+      local win = vim.fn.win_findbuf(theirs.bufnr)[1]
+      assert.truthy(win)
+
+      fire("SessionsLoadPost", session)
+      local ours = terminal.list()[1]
+      assert.equals("sh", ours.name)
+      assert.are_not.equal(theirs, ours)
+      assert.is_falsy(theirs.exited or theirs.disposed, "theirs still runs")
+      assert.same({ win }, vim.fn.win_findbuf(theirs.bufnr), "and is still shown")
+      terminal.close({ name = "sh", dir = other })
     end)
 
     it("whose folder is gone comes back in the project, with a warning", function()

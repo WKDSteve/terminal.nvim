@@ -35,7 +35,7 @@ local GROUP = "terminal.sessions"
 ---@field list fun(all?: boolean): Terminal.Handle[]
 ---@field open fun(target: Terminal.Target): Terminal.Handle|nil, string|nil
 ---@field hide fun(target: Terminal.Target): boolean, string|nil
----@field close fun(target: Terminal.Target): boolean, string|nil
+---@field in_project? fun(dir: string): boolean Default `M.in_project`
 ---@field run fun(cmd: string|string[], opts: Terminal.RunOpts): boolean|nil, string|nil
 
 --- Where the definitions of the session file `path` are kept.
@@ -337,12 +337,27 @@ local function is_dir(path)
   return vim.fn.isdirectory(path) == 1
 end
 
+--- Whether a terminal opened for the directory `dir` (`open({ dir })`) would belong to the project
+--- the editor is in, the one whose terminals `list()` returns and a save writes.
+---@param dir string
+---@return boolean
+function M.in_project(dir)
+  local context = require("terminal.core.context")
+  local deps = context.from_editor()
+  local _, root = context.resolve(require("terminal.config").get("cwd"), deps)
+  local cwd, dir_root = context.resolve_dir(dir, deps)
+  return cwd ~= nil and dir_root == root
+end
+
 ---@internal
 --- Open the shell of `def` (not hidden yet) in its saved directory, the way `open({ dir })` does,
 --- so a terminal opened for a folder comes back in that folder. When the directory is gone, or now
 --- lies in another project (a moved checkout, another machine), the shell opens in the project's
 --- directory instead, under the same name, and `why` says so: a session must not lose a terminal,
 --- nor put it into a project it was never part of.
+---
+--- Decided before anything opens: `open({ dir })` into another project could show (or create) a
+--- terminal there, and one of the same name the user has open in that project is not ours to touch.
 ---@param api Terminal.SessionsApi
 ---@param def Terminal.SessionDef
 ---@return Terminal.Target|nil target # The target that found it (for `hide`); nil: it failed
@@ -352,17 +367,16 @@ local function open_shell(api, def)
   local plain = { name = def.name, layout = def.layout, focus = false }
   local why
   if def.cwd and is_dir(def.cwd) then
-    local at = { name = def.name, layout = def.layout, focus = false, dir = def.cwd }
-    local handle, err = api.open(at)
-    if not handle then
-      return nil, err, nil
-    end
     -- The project's list is what the next save writes: a terminal outside it would be gone from
     -- the session after that save.
-    if vim.list_contains(api.list(), handle) then
+    if (api.in_project or M.in_project)(def.cwd) then
+      local at = { name = def.name, layout = def.layout, focus = false, dir = def.cwd }
+      local handle, err = api.open(at)
+      if not handle then
+        return nil, err, nil
+      end
       return at, nil, nil
     end
-    api.close({ name = def.name, dir = def.cwd })
     why = "belongs to another project now"
   elseif def.cwd then
     why = "is gone"
