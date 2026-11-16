@@ -123,6 +123,7 @@ function M.check()
     { "lib.nvim.terminal.osc", "escape sequences for the status export" },
     { "lib.nvim.debounce", "status debounce" },
     { "lib.nvim.fs.json", "terminal definitions saved with a session" },
+    { "lib.nvim.fs.portable", "saved directories relative to the session root" },
   }
   for _, r in ipairs(required) do
     if pcall(require, r[1]) then
