@@ -52,8 +52,7 @@ had.
   | `"never"` | open those terminals as plain shells |
 
   A session whose terminals are all plain shells is never asked about.
-  The prompt lists every command with the directory it would run in; control characters of the file (also the Unicode ones that reorder, hide or smuggle text: bidi marks, zero width and invisible characters, separators, tag characters) are spelled out (`
-`) and a long entry is cut, so a sidecar from a shared or cloned session directory cannot hide what *Start the commands* runs.
+  The prompt lists every command with the directory it would run in; control characters of the file (also the Unicode ones that reorder, hide or smuggle text: bidi marks, zero width and invisible characters, separators, tag characters) are spelled out (a newline as `\x0a`) and a long entry is cut, so a sidecar from a shared or cloned session directory cannot hide what *Start the commands* runs.
 - Every terminal starts in the **directory** it was started in. A terminal opened for a folder
   (`open({ dir = ... })`, "Terminal here" in a tree) comes back under its name, in that folder.
   - A shell whose directory is gone opens in the project's directory under the same name, and a
