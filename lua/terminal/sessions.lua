@@ -7,9 +7,14 @@
 --- shows it.
 ---
 --- The coupling is `User` events and nothing else: sessions.nvim fires `SessionsSavePost` /
---- `SessionsLoadPost` (`ev.data = { name, path, tab }`), `SessionsRenamePost` (`{ old_name,
---- old_path, name, path }`) and `SessionsDeletePost` (`{ name, path }`), this module listens.
---- Neither plugin requires the other. Tab snapshots carry no terminals.
+--- `SessionsLoadPost` (`ev.data = { name, path, tab, root?, root_remap? }`), `SessionsRenamePost`
+--- (`{ old_name, old_path, name, path }`) and `SessionsDeletePost` (`{ name, path }`), this module
+--- listens. Neither plugin requires the other. Tab snapshots carry no terminals.
+---
+--- The directories follow the session file's portability: with `root` (sessions.nvim's
+--- `relative_paths`) a directory below it is written relative to it and resolved against the root
+--- of the load; `root_remap` translates the absolute ones on load. A sidecar written without them
+--- (absolute directories) loads as before.
 ---
 --- The sidecar `.<session>.terminals.json` sits beside the session file, like sessions.nvim's own
 --- `.<session>.meta.json` and `.<session>.bufs.json`. Only the project's native terminals are
@@ -29,6 +34,67 @@ local GROUP = "terminal.sessions"
 ---@field close? "always"|"success"|"never" With `cmd`: what `run` was given for the job's end
 ---@field title? string With `cmd`: the window title `run` was given
 ---@field float? table With `cmd`: the `float` overrides `run` was given
+
+--- What a `SessionsSavePost` / `SessionsLoadPost` says about where the session's paths are anchored.
+---@class Terminal.SessionsAnchor
+---@field root? string The directory the session's paths are relative to (sessions.nvim `relative_paths`)
+---@field root_remap? table<string, string> Old-root -> new-root prefixes to translate on load
+
+--- The placeholder for the session root in a sidecar, the one sessions.nvim writes into the session.
+M.PLACEHOLDER = "{{SESSION_ROOT}}"
+
+--- The anchor of an event's `data`, reduced to what is safe to use.
+---@param data table
+---@return Terminal.SessionsAnchor
+function M.anchor(data)
+  local remap
+  if type(data.root_remap) == "table" then
+    for old_root, new_root in pairs(data.root_remap) do
+      if type(old_root) == "string" and old_root ~= "" and type(new_root) == "string" then
+        remap = remap or {}
+        remap[old_root] = new_root
+      end
+    end
+  end
+  return {
+    root = (type(data.root) == "string" and data.root ~= "") and data.root or nil,
+    root_remap = remap,
+  }
+end
+
+--- `cwd` as a sidecar stores it: below `anchor.root` relative to it (`{{SESSION_ROOT}}/...`),
+--- otherwise as it is.
+---@param cwd string
+---@param anchor? Terminal.SessionsAnchor
+---@return string
+function M.portable_cwd(cwd, anchor)
+  if not (anchor and anchor.root) then
+    return cwd
+  end
+  return require("lib.nvim.fs.portable").make(
+    vim.fs.normalize(cwd),
+    { { path = vim.fs.normalize(anchor.root), placeholder = M.PLACEHOLDER } }
+  )
+end
+
+--- A stored `cwd` for this machine: the placeholder becomes `anchor.root` (the working directory
+--- when the event names none: sessions.nvim re-anchors a session there too), then the
+--- `root_remap` prefixes are translated. An absolute directory without a remap stays as it is.
+---@param cwd string
+---@param anchor? Terminal.SessionsAnchor
+---@return string
+function M.resolve_cwd(cwd, anchor)
+  local remap = anchor and anchor.root_remap
+  if not cwd:find(M.PLACEHOLDER, 1, true) and not remap then
+    return cwd
+  end
+  local root = (anchor and anchor.root) or vim.fn.getcwd()
+  return require("lib.nvim.fs.portable").resolve(
+    cwd,
+    { { path = vim.fs.normalize(root), placeholder = M.PLACEHOLDER } },
+    { remap = remap }
+  )
+end
 
 --- The facade functions this module needs; specs hand in a double.
 ---@class Terminal.SessionsApi
@@ -208,9 +274,10 @@ end
 --- keeps out of the session is dropped for good, not only while that terminal is open.
 ---@param api Terminal.SessionsApi
 ---@param session_path string
+---@param anchor? Terminal.SessionsAnchor With a `root`: directories below it are written relative to it
 ---@return boolean ok
 ---@return string|nil err
-function M.save(api, session_path)
+function M.save(api, session_path, anchor)
   local file = M.sidecar_path(session_path)
   local opted_out = M.opted_out(api)
   -- `opted_out` only names live terminals: once the opted-out one is gone (a `close = "always"`
@@ -228,7 +295,13 @@ function M.save(api, session_path)
     os.remove(file)
     return true, nil
   end
-  return require("lib.nvim.fs.json").write(file, { version = 1, terminals = defs })
+  local stored = {}
+  for i, def in ipairs(defs) do
+    -- (a copy: `kept` holds this machine's directories, the file the portable ones)
+    stored[i] = def.cwd and vim.tbl_extend("force", def, { cwd = M.portable_cwd(def.cwd, anchor) })
+      or def
+  end
+  return require("lib.nvim.fs.json").write(file, { version = 1, terminals = stored })
 end
 
 --- A session was renamed: the sidecar goes with it. An existing sidecar of the new name is a
@@ -262,16 +335,23 @@ function M.delete(session_path)
 end
 
 --- The definitions saved for the session file `path` (none when there is no sidecar or it is
---- unreadable).
+--- unreadable), with their directories resolved for this machine (`resolve_cwd`).
 ---@param session_path string
+---@param anchor? Terminal.SessionsAnchor
 ---@return Terminal.SessionDef[]
-function M.read(session_path)
+function M.read(session_path, anchor)
   local file = M.sidecar_path(session_path)
   if vim.fn.filereadable(file) == 0 then
     return {}
   end
   local decoded = require("lib.nvim.fs.json").read(file)
-  return M.validate(decoded)
+  local defs = M.validate(decoded)
+  for _, def in ipairs(defs) do
+    if def.cwd then
+      def.cwd = M.resolve_cwd(def.cwd, anchor)
+    end
+  end
+  return defs
 end
 
 ---@internal
@@ -474,9 +554,10 @@ end
 ---@param session_path string
 ---@param commands "ask"|"run"|"never"
 ---@param select? fun(items: string[], opts: table, on_choice: fun(item: string|nil)) Default `vim.ui.select`
+---@param anchor? Terminal.SessionsAnchor Where the stored directories are resolved (`read`)
 ---@return nil
-function M.load(api, session_path, commands, select)
-  local defs = M.read(session_path)
+function M.load(api, session_path, commands, select, anchor)
+  local defs = M.read(session_path, anchor)
   if #defs == 0 then
     return
   end
@@ -535,7 +616,7 @@ function M.setup(cfg, api)
       if type(ev.data) ~= "table" or ev.data.tab or type(ev.data.path) ~= "string" then
         return
       end
-      local ok, err = M.save(facade(), ev.data.path)
+      local ok, err = M.save(facade(), ev.data.path, M.anchor(ev.data))
       if not ok then
         require("terminal.notify").warn("sessions: terminals not saved: " .. tostring(err))
       end
@@ -549,7 +630,13 @@ function M.setup(cfg, api)
       if type(ev.data) ~= "table" or ev.data.tab or type(ev.data.path) ~= "string" then
         return
       end
-      M.load(facade(), ev.data.path, require("terminal.config").get("sessions.commands"))
+      M.load(
+        facade(),
+        ev.data.path,
+        require("terminal.config").get("sessions.commands"),
+        nil,
+        M.anchor(ev.data)
+      )
     end,
   })
   vim.api.nvim_create_autocmd("User", {

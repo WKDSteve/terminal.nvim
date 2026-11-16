@@ -368,6 +368,97 @@ describe("terminal.sessions (definitions and a fake facade)", function()
     end)
   end)
 
+  describe("directories relative to the session root", function()
+    local function sidecar_cwds(path)
+      local decoded =
+        vim.json.decode(table.concat(vim.fn.readfile(sessions.sidecar_path(path)), "\n"))
+      local out = {}
+      for _, d in ipairs(decoded.terminals) do
+        out[d.name] = d.cwd
+      end
+      return out
+    end
+
+    it("are written relative to the root and come back below the root of the load", function()
+      local path = dir .. "/work.vim"
+      local root = vim.fs.normalize(dir .. "/proj")
+      local outside = vim.fs.normalize(dir .. "/elsewhere")
+      local handles = {
+        { name = "top", backend = "native", layout = "float", cwd = root },
+        { name = "docs/", backend = "native", layout = "float", cwd = root .. "/docs" },
+        { name = "out", backend = "native", layout = "float", cwd = outside },
+        -- a sibling that only starts with the root's text is not below it
+        { name = "sib", backend = "native", layout = "float", cwd = root .. "-backup" },
+      }
+      assert.is_true((sessions.save(fake(handles), path, { root = root })))
+      assert.same({
+        top = sessions.PLACEHOLDER,
+        ["docs/"] = sessions.PLACEHOLDER .. "/docs",
+        out = outside,
+        sib = root .. "-backup",
+      }, sidecar_cwds(path))
+
+      local moved = "/new/place"
+      local cwds = {}
+      for _, def in ipairs(sessions.read(path, { root = moved })) do
+        cwds[def.name] = def.cwd
+      end
+      assert.same({
+        top = moved,
+        ["docs/"] = moved .. "/docs",
+        out = outside,
+        sib = root .. "-backup",
+      }, cwds)
+    end)
+
+    it("without a root are written as they are, as before", function()
+      local path = dir .. "/work.vim"
+      local handles = { { name = "a", backend = "native", layout = "float", cwd = dir } }
+      assert.is_true((sessions.save(fake(handles), path)))
+      assert.same({ a = dir }, sidecar_cwds(path))
+      assert.is_true((sessions.save(fake(handles), path, { root_remap = { [dir] = "/x" } })))
+      assert.same({ a = dir }, sidecar_cwds(path), "a remap alone does not change what is written")
+    end)
+
+    it("an old sidecar with absolute directories loads as before", function()
+      local path = dir .. "/work.vim"
+      local f = assert(io.open(sessions.sidecar_path(path), "w"))
+      f:write(vim.json.encode({
+        version = 1,
+        terminals = { { name = "a", layout = "float", cwd = "/old/proj/docs" } },
+      }))
+      f:close()
+      assert.equals("/old/proj/docs", sessions.read(path)[1].cwd)
+      assert.equals("/old/proj/docs", sessions.read(path, { root = "/new/proj" })[1].cwd)
+      assert.equals(
+        "/new/proj/docs",
+        sessions.read(path, { root_remap = { ["/old/proj"] = "/new/proj" } })[1].cwd,
+        "root_remap translates an absolute directory"
+      )
+      assert.equals(
+        "/old/proj-x/docs",
+        sessions.resolve_cwd("/old/proj-x/docs", { root_remap = { ["/old/proj"] = "/new/proj" } }),
+        "only at a path boundary"
+      )
+    end)
+
+    it("a relative directory without a root resolves against the working directory", function()
+      assert.equals(
+        vim.fs.normalize(vim.fn.getcwd()) .. "/docs",
+        sessions.resolve_cwd(sessions.PLACEHOLDER .. "/docs", {})
+      )
+    end)
+
+    it("anchor keeps only what is safe to use", function()
+      assert.same({}, sessions.anchor({ root = 1, root_remap = "x" }))
+      assert.same({}, sessions.anchor({ root = "", root_remap = { [1] = "a", b = 2, [""] = "c" } }))
+      assert.same(
+        { root = "/r", root_remap = { ["/a"] = "/b" } },
+        sessions.anchor({ root = "/r", root_remap = { ["/a"] = "/b", bad = false } })
+      )
+    end)
+  end)
+
   describe("load", function()
     local path
     before_each(function()
@@ -662,10 +753,15 @@ describe("terminal.sessions (the User events, on the real facade)", function()
 
   ---@param tab? boolean
   ---@param path string
-  local function fire(event, path, tab)
+  ---@param extra? table More `data` (`root`, `root_remap`)
+  local function fire(event, path, tab, extra)
     vim.api.nvim_exec_autocmds("User", {
       pattern = event,
-      data = { name = "work", path = path, tab = tab or false },
+      data = vim.tbl_extend(
+        "force",
+        { name = "work", path = path, tab = tab or false },
+        extra or {}
+      ),
     })
   end
 
@@ -899,6 +995,29 @@ describe("terminal.sessions (the User events, on the real facade)", function()
       assert.equals("docs/", h.name)
       assert.equals(docs, vim.fs.normalize(h.cwd))
       assert.same({}, vim.fn.win_findbuf(h.bufnr), "it comes back hidden")
+    end)
+
+    it("follows the session root to the project's new place", function()
+      boot()
+      local session = dir .. "/work.vim"
+      local proj = vim.fs.normalize(dir .. "/proj")
+      assert.truthy(terminal.open({ dir = proj .. "/docs", focus = false }))
+      fire("SessionsSavePost", session, false, { root = proj })
+      for _, h in ipairs(terminal.list()) do
+        jobs.settle()
+        terminal.close({ name = h.name })
+      end
+
+      -- The same project checked out at another place (the old one still there: an absolute
+      -- directory would now be another project's).
+      local copy = vim.fs.normalize(dir .. "/copy")
+      vim.fn.mkdir(copy .. "/.git", "p")
+      vim.fn.mkdir(copy .. "/docs", "p")
+      vim.cmd.cd(vim.fn.fnameescape(copy))
+      fire("SessionsLoadPost", session, false, { root = copy })
+      local h = terminal.list()[1]
+      assert.equals("docs/", h.name)
+      assert.equals(copy .. "/docs", vim.fs.normalize(h.cwd))
     end)
 
     it("in_project tells a folder of the project from one of another project", function()

@@ -10,8 +10,8 @@ listens:
 
 | Event | Data | terminal.nvim |
 |---|---|---|
-| `SessionsSavePost` | `{ name, path, tab }` | writes `.<session>.terminals.json` beside the session file |
-| `SessionsLoadPost` | `{ name, path, tab }` | reads it and reopens what is not there yet |
+| `SessionsSavePost` | `{ name, path, tab, root?, root_remap? }` | writes `.<session>.terminals.json` beside the session file |
+| `SessionsLoadPost` | `{ name, path, tab, root?, root_remap? }` | reads it and reopens what is not there yet |
 
 A tab snapshot (`:Session save-tab`) carries no terminals: `tab` is `true` and both events are
 ignored.
@@ -64,6 +64,26 @@ had.
     for the next save.
 - What cannot be reopened is reported in one warning, and the rest is reopened anyway.
 
+## Moved projects: `relative_paths` and `root_remap`
+
+The directories follow sessions.nvim's
+[portability](https://github.com/WKDSteve/sessions.nvim/blob/main/docs/portability.md) options,
+which it passes along in the events:
+
+- With `relative_paths = true` the events carry `root` (the working directory of the save, or the
+  one a load re-anchored the session to). A directory inside it is written as
+  `{{SESSION_ROOT}}/...`, and a load puts it below the `root` of that load: the same project
+  checked out at another path, or on another machine, gets its terminals back in their folders.
+  Directories outside the root stay absolute (only at a path boundary: `proj-backup` is not inside
+  `proj`).
+- With `root_remap` the events carry that table, and a load translates the absolute directories
+  through it (old prefix -> new prefix, at a path boundary), as sessions.nvim does for the session
+  file. A key for a path below the home directory has to match the absolute path here (the
+  sidecar does not write `~`).
+- A sidecar written before (or without these options) has absolute directories and loads as it
+  always did. A relative directory loaded without a `root` (the option turned off since) is put
+  below the working directory, where sessions.nvim re-anchors the session too.
+
 ## Options
 
 ```lua
@@ -83,7 +103,8 @@ require("terminal").setup({
   sidecar behind; every save writes the file anew (or removes it), so a leftover never brings
   terminals back into a session saved later under that name.
 - A load that did not bring a terminal back as saved (*Skip*, an unanswered prompt, a failed start, or a command replaced by a plain shell) keeps its definition for the rest of this Neovim run: the next save writes it again next to the live terminals, so it is not lost on a machine that cannot start it. A live terminal of the same name wins. The kept definitions are forgotten when Neovim exits; they stay in the sidecar until a save in a run that did not load that session overwrites it.
-- The directory is a path on this machine. A session moved to another checkout or machine (or
-  loaded with sessions.nvim's `relative_paths` / `root_remap`) has terminals whose directory is
-  gone or lies elsewhere: their shells come back in the project's directory (see above), and a
-  command is not started in a place it was not saved for.
+- Without `relative_paths` / `root_remap` the directory is a path on this machine. A session moved
+  to another checkout or machine then has terminals whose directory is gone or lies elsewhere:
+  their shells come back in the project's directory (see above), and a command is not started in
+  a place it was not saved for. With the options, see
+  [Moved projects](#moved-projects-relative_paths-and-root_remap).

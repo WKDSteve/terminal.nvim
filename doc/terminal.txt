@@ -177,8 +177,11 @@ with its `close`, `title` and `float`) in `.<session>.terminals.json` beside
 the session file and reopens them, hidden, when it is loaded, each in the
 directory it was started in (a terminal opened for a folder comes back in that
 folder). A shell whose directory is gone opens in the project's directory, with
-a warning; a command whose directory is gone is not started. No process is
-saved. Terminals that already exist are left alone. The commands are asked about once (`sessions.commands`: "ask",
+a warning; a command whose directory is gone is not started. With
+sessions.nvim's `relative_paths` a directory inside the project is saved
+relative to the session root and comes back below the root of the load (a
+moved checkout, another machine); `root_remap` translates the absolute ones.
+No process is saved. Terminals that already exist are left alone. The commands are asked about once (`sessions.commands`: "ask",
 "run" or "never"); `sessions.enable = false` turns it off. A terminal started
 by run() with `{ direct = true, session = false }` is never saved. See
 docs/sessions.md.
