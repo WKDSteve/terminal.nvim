@@ -54,6 +54,14 @@ had.
   A session whose terminals are all plain shells is never asked about.
   The prompt lists every command with the directory it would run in; control characters of the file (also the Unicode ones that reorder, hide or smuggle text: bidi marks, zero width and invisible characters, separators, tag characters) are spelled out (`
 `) and a long entry is cut, so a sidecar from a shared or cloned session directory cannot hide what *Start the commands* runs.
+- Every terminal starts in the **directory** it was started in. A terminal opened for a folder
+  (`open({ dir = ... })`, "Terminal here" in a tree) comes back under its name, in that folder.
+  - A shell whose directory is gone opens in the project's directory under the same name, and a
+    warning names it. So does a shell whose directory now lies in another project (the session's
+    terminals are this project's: one opened elsewhere would not be saved with it again).
+  - A command whose directory is gone is **not** started anywhere else (it may build, clean or
+    delete relative to where it runs): it is reported as not reopened and its definition is kept
+    for the next save.
 - What cannot be reopened is reported in one warning, and the rest is reopened anyway.
 
 ## Options
@@ -75,7 +83,7 @@ require("terminal").setup({
   sidecar behind; every save writes the file anew (or removes it), so a leftover never brings
   terminals back into a session saved later under that name.
 - A load that did not bring a terminal back as saved (*Skip*, an unanswered prompt, a failed start, or a command replaced by a plain shell) keeps its definition for the rest of this Neovim run: the next save writes it again next to the live terminals, so it is not lost on a machine that cannot start it. A live terminal of the same name wins. The kept definitions are forgotten when Neovim exits; they stay in the sidecar until a save in a run that did not load that session overwrites it.
-- The directory of a `run` with `direct` is restored; a plain shell starts where the `cwd` option
-  puts it (`project` by default), which for a session of one project is the same place. That
-  holds for a terminal that was opened for a folder as well (`open({ dir = ... })`, "Terminal
-  here"): it comes back under its name, in the project's directory.
+- The directory is a path on this machine. A session moved to another checkout or machine (or
+  loaded with sessions.nvim's `relative_paths` / `root_remap`) has terminals whose directory is
+  gone or lies elsewhere: their shells come back in the project's directory (see above), and a
+  command is not started in a place it was not saved for.

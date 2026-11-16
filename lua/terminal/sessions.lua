@@ -3,7 +3,8 @@
 --- `run` with `direct`, the command with its `close`, `title` and `float`) are written next to the
 --- session file when it is saved and
 --- reopened when it is loaded. No process is saved: a reopened terminal is a fresh shell (or a fresh
---- start of the command), and it comes back hidden, so `toggle` shows it.
+--- start of the command) in the directory it was started in, and it comes back hidden, so `toggle`
+--- shows it.
 ---
 --- The coupling is `User` events and nothing else: sessions.nvim fires `SessionsSavePost` /
 --- `SessionsLoadPost` (`ev.data = { name, path, tab }`), `SessionsRenamePost` (`{ old_name,
@@ -34,6 +35,7 @@ local GROUP = "terminal.sessions"
 ---@field list fun(all?: boolean): Terminal.Handle[]
 ---@field open fun(target: Terminal.Target): Terminal.Handle|nil, string|nil
 ---@field hide fun(target: Terminal.Target): boolean, string|nil
+---@field close fun(target: Terminal.Target): boolean, string|nil
 ---@field run fun(cmd: string|string[], opts: Terminal.RunOpts): boolean|nil, string|nil
 
 --- Where the definitions of the session file `path` are kept.
@@ -325,10 +327,59 @@ end
 ---@field opened integer
 ---@field skipped integer Already there: left alone
 ---@field failed string[]
+---@field moved string[] Shells whose saved directory is gone (or another project's now): reopened in the project's directory, as `name: directory (why)`
 ---@field left_over Terminal.SessionDef[] Not brought back as saved: failed starts, and commands that were opened as plain shells
+
+---@internal
+---@param path string
+---@return boolean
+local function is_dir(path)
+  return vim.fn.isdirectory(path) == 1
+end
+
+---@internal
+--- Open the shell of `def` (not hidden yet) in its saved directory, the way `open({ dir })` does,
+--- so a terminal opened for a folder comes back in that folder. When the directory is gone, or now
+--- lies in another project (a moved checkout, another machine), the shell opens in the project's
+--- directory instead, under the same name, and `why` says so: a session must not lose a terminal,
+--- nor put it into a project it was never part of.
+---@param api Terminal.SessionsApi
+---@param def Terminal.SessionDef
+---@return Terminal.Target|nil target # The target that found it (for `hide`); nil: it failed
+---@return string|nil err
+---@return string|nil why # Set when it did not come back in its saved directory
+local function open_shell(api, def)
+  local plain = { name = def.name, layout = def.layout, focus = false }
+  local why
+  if def.cwd and is_dir(def.cwd) then
+    local at = { name = def.name, layout = def.layout, focus = false, dir = def.cwd }
+    local handle, err = api.open(at)
+    if not handle then
+      return nil, err, nil
+    end
+    -- The project's list is what the next save writes: a terminal outside it would be gone from
+    -- the session after that save.
+    if vim.list_contains(api.list(), handle) then
+      return at, nil, nil
+    end
+    api.close({ name = def.name, dir = def.cwd })
+    why = "belongs to another project now"
+  elseif def.cwd then
+    why = "is gone"
+  end
+  local handle, err = api.open(plain)
+  if not handle then
+    return nil, err, nil
+  end
+  return plain, nil, why
+end
 
 --- Reopen `defs` (hidden), except the terminals that already exist: loading a session twice, or
 --- with a terminal of the same name open, must not duplicate or replace anything.
+---
+--- Each terminal starts in its saved directory. A shell whose directory is gone opens in the
+--- project's directory (`moved`); a command whose directory is gone is not started anywhere else
+--- (`failed`, kept for the next save): it may build, clean or delete relative to where it runs.
 ---
 --- `with_commands`: start the saved commands (true), or open those terminals as plain shells
 --- (false).
@@ -337,7 +388,7 @@ end
 ---@param with_commands boolean
 ---@return Terminal.SessionsRestored
 function M.restore(api, defs, with_commands)
-  local result = { opened = 0, skipped = 0, failed = {}, left_over = {} }
+  local result = { opened = 0, skipped = 0, failed = {}, moved = {}, left_over = {} }
   local present = {}
   for _, h in ipairs(api.list()) do
     present[h.name] = true
@@ -347,24 +398,33 @@ function M.restore(api, defs, with_commands)
       result.skipped = result.skipped + 1
     else
       local ok, err
+      local target = { name = def.name }
       if def.cmd and with_commands then
-        ok, err = api.run(def.cmd, {
-          name = def.name,
-          layout = def.layout,
-          focus = false,
-          direct = true,
-          cwd = def.cwd,
-          close = def.close,
-          title = def.title,
-          float = def.float,
-        })
+        if def.cwd and not is_dir(def.cwd) then
+          ok, err = false, ("directory %s is gone, the command was not started"):format(def.cwd)
+        else
+          ok, err = api.run(def.cmd, {
+            name = def.name,
+            layout = def.layout,
+            focus = false,
+            direct = true,
+            cwd = def.cwd,
+            close = def.close,
+            title = def.title,
+            float = def.float,
+          })
+        end
       else
-        local handle
-        handle, err = api.open({ name = def.name, layout = def.layout, focus = false })
-        ok = handle ~= nil
+        local at, why
+        at, err, why = open_shell(api, def)
+        ok = at ~= nil
+        target = at and { name = at.name, dir = at.dir } or target
+        if why then
+          result.moved[#result.moved + 1] = ("%s: %s (%s)"):format(def.name, def.cwd, why)
+        end
       end
       if ok then
-        api.hide({ name = def.name })
+        api.hide(target)
         result.opened = result.opened + 1
         if def.cmd and not with_commands then
           result.left_over[#result.left_over + 1] = def
@@ -384,6 +444,11 @@ local function report(result)
   if #result.failed > 0 then
     require("terminal.notify").warn(
       "sessions: could not reopen " .. table.concat(result.failed, "; ")
+    )
+  end
+  if #result.moved > 0 then
+    require("terminal.notify").warn(
+      "sessions: reopened in the project's directory: " .. table.concat(result.moved, "; ")
     )
   end
 end

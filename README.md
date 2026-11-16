@@ -83,7 +83,7 @@ answers.
 
 ### Sessions
 
-- [Sessions](docs/sessions.md) — the terminals of a sessions.nvim session are saved with it and reopened (hidden) on load.
+- [Sessions](docs/sessions.md) — the terminals of a sessions.nvim session are saved with it and reopened (hidden) on load, each in the directory it was started in.
 - [Ask Neovim](docs/ask.md) — a git hook, lazygit or any script in a terminal asks you with a Neovim dialog, where it has no terminal to ask on (git hooks on Windows).
 
 ### Backends

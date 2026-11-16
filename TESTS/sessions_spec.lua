@@ -24,19 +24,34 @@ describe("terminal.sessions (definitions and a fake facade)", function()
   ---@param handles table[]
   ---@param calls? table[]
   ---@param fail_for? table<string, boolean>
-  local function fake(handles, calls, fail_for)
+  ---@param elsewhere? table<string, boolean> Directories that lie in another project
+  local function fake(handles, calls, fail_for, elsewhere)
     calls = calls or {}
     fail_for = fail_for or {}
+    elsewhere = elsewhere or {}
     return {
       list = function()
         return handles
       end,
       open = function(target)
         calls[#calls + 1] = { "open", target.name, target.layout, target.focus }
+        -- The whole target of each open, by name (`dir` included).
+        ---@diagnostic disable-next-line: inject-field
+        calls.open_targets = calls.open_targets or {}
+        calls.open_targets[target.name] = target
         if fail_for[target.name] then
           return nil, "no way"
         end
-        return { name = target.name }
+        local handle = { name = target.name, dir = target.dir }
+        -- A directory named in `elsewhere` lies in another project: not in this project's list.
+        if not (target.dir and elsewhere[target.dir]) then
+          handles[#handles + 1] = handle
+        end
+        return handle
+      end,
+      close = function(target)
+        calls[#calls + 1] = { "close", target.name, target.dir }
+        return true
       end,
       run = function(cmd, opts)
         calls[#calls + 1] = { "run", opts.name, table.concat(cmd, " "), opts.cwd, opts.direct }
@@ -51,6 +66,9 @@ describe("terminal.sessions (definitions and a fake facade)", function()
       end,
       hide = function(target)
         calls[#calls + 1] = { "hide", target.name }
+        ---@diagnostic disable-next-line: inject-field
+        calls.hide_targets = calls.hide_targets or {}
+        calls.hide_targets[target.name] = target
         return true
       end,
     }
@@ -265,13 +283,13 @@ describe("terminal.sessions (definitions and a fake facade)", function()
       local result = sessions.restore(api, {
         { name = "keep", layout = "float" },
         { name = "sh", layout = "split" },
-        { name = "build", layout = "float", cmd = { "make", "all" }, cwd = "/p" },
+        { name = "build", layout = "float", cmd = { "make", "all" }, cwd = dir },
       }, true)
       assert.equals(2, result.opened)
       assert.equals(1, result.skipped)
       assert.same({ "open", "sh", "split", false }, calls[1])
       assert.same({ "hide", "sh" }, calls[2])
-      assert.same({ "run", "build", "make all", "/p", true }, calls[3])
+      assert.same({ "run", "build", "make all", dir, true }, calls[3])
       assert.same({ "hide", "build" }, calls[4])
     end
   )
@@ -293,6 +311,67 @@ describe("terminal.sessions (definitions and a fake facade)", function()
     assert.equals(1, result.opened)
     assert.equals(1, #result.failed)
     assert.truthy(result.failed[1]:find("bad: no way", 1, true))
+  end)
+
+  describe("the saved directory", function()
+    it("a shell opens in its saved directory and is hidden there", function()
+      local calls = {}
+      local result = sessions.restore(fake({}, calls), {
+        { name = "docs/", layout = "float", cwd = dir },
+      }, true)
+      assert.equals(1, result.opened)
+      assert.same({}, result.moved)
+      assert.equals(dir, calls.open_targets["docs/"].dir)
+      assert.equals("docs/", calls.open_targets["docs/"].name, "the saved name, not the folder's")
+      assert.equals(dir, calls.hide_targets["docs/"].dir)
+    end)
+
+    it("a shell whose directory is gone opens in the project, and says so", function()
+      local calls = {}
+      local gone = dir .. "/gone"
+      local result = sessions.restore(fake({}, calls), {
+        { name = "gone/", layout = "float", cwd = gone },
+      }, true)
+      assert.equals(1, result.opened)
+      assert.same({}, result.failed)
+      assert.is_nil(calls.open_targets["gone/"].dir)
+      assert.equals("gone/", calls.open_targets["gone/"].name)
+      assert.same({ "hide", "gone/" }, calls[2])
+      assert.equals(1, #result.moved)
+      assert.truthy(result.moved[1]:find("gone/: " .. gone .. " (is gone)", 1, true))
+    end)
+
+    it("a shell whose directory is another project's now is closed there, opened here", function()
+      local calls = {}
+      local result = sessions.restore(fake({}, calls, nil, { [dir] = true }), {
+        { name = "sh", layout = "split", cwd = dir },
+      }, true)
+      assert.equals(1, result.opened)
+      assert.same({ "open", "sh", "split", false }, calls[1])
+      assert.same({ "close", "sh", dir }, calls[2])
+      assert.same({ "open", "sh", "split", false }, calls[3])
+      assert.is_nil(calls.open_targets.sh.dir)
+      assert.same({ "hide", "sh" }, calls[4])
+      assert.truthy(result.moved[1]:find("another project", 1, true))
+    end)
+
+    it("a command whose directory is gone is not started anywhere, and is kept", function()
+      local calls = {}
+      local def = { name = "build", layout = "float", cmd = { "make" }, cwd = dir .. "/gone" }
+      local result = sessions.restore(fake({}, calls), { def }, true)
+      assert.equals(0, result.opened)
+      assert.same({}, calls)
+      assert.truthy(result.failed[1]:find("build: directory " .. dir .. "/gone is gone", 1, true))
+      assert.same({ def }, result.left_over)
+    end)
+
+    it("a command opened as a plain shell opens in the command's directory", function()
+      local calls = {}
+      sessions.restore(fake({}, calls), {
+        { name = "build", layout = "float", cmd = { "make" }, cwd = dir },
+      }, false)
+      assert.equals(dir, calls.open_targets.build.dir)
+    end)
   end)
 
   describe("load", function()
@@ -782,6 +861,77 @@ describe("terminal.sessions (the User events, on the real facade)", function()
     local cfg = vim.api.nvim_win_get_config(vim.fn.win_findbuf(h.bufnr)[1])
     assert.truthy(vim.inspect(cfg.title):find("Git", 1, true))
     assert.is_true(cfg.width < vim.o.columns * 0.6)
+  end)
+
+  describe("a terminal opened for a folder", function()
+    local cwd_before
+
+    before_each(function()
+      cwd_before = vim.fn.getcwd()
+      vim.fn.mkdir(dir .. "/proj/.git", "p")
+      vim.fn.mkdir(dir .. "/proj/docs", "p")
+      vim.cmd.cd(vim.fn.fnameescape(dir .. "/proj"))
+    end)
+
+    after_each(function()
+      -- The outer after_each closes by name in the editor's project: close them here, while this
+      -- project is the editor's.
+      for _, h in ipairs(terminal.list()) do
+        jobs.settle()
+        terminal.close({ name = h.name })
+      end
+      vim.cmd.cd(vim.fn.fnameescape(cwd_before))
+    end)
+
+    ---@param session string
+    local function save_and_close(session)
+      fire("SessionsSavePost", session)
+      for _, h in ipairs(terminal.list()) do
+        jobs.settle()
+        terminal.close({ name = h.name })
+      end
+      assert.equals(0, #terminal.list())
+    end
+
+    it("comes back from the session under its name, in its folder", function()
+      boot()
+      local session = dir .. "/work.vim"
+      local docs = vim.fs.normalize(dir .. "/proj/docs")
+      assert.truthy(terminal.open({ dir = docs, focus = false }))
+      save_and_close(session)
+
+      fire("SessionsLoadPost", session)
+      local h = terminal.list()[1]
+      assert.equals("docs/", h.name)
+      assert.equals(docs, vim.fs.normalize(h.cwd))
+      assert.same({}, vim.fn.win_findbuf(h.bufnr), "it comes back hidden")
+    end)
+
+    it("whose folder is gone comes back in the project, with a warning", function()
+      boot()
+      local session = dir .. "/work.vim"
+      local docs = vim.fs.normalize(dir .. "/proj/docs")
+      assert.truthy(terminal.open({ dir = docs, focus = false }))
+      save_and_close(session)
+      vim.fn.delete(docs, "rf")
+
+      local warned = {}
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.notify = function(msg)
+        warned[#warned + 1] = msg
+      end
+      fire("SessionsLoadPost", session)
+      local h = terminal.list()[1]
+      assert.equals("docs/", h.name, "under its name")
+      assert.equals(
+        vim.fs.normalize(vim.fn.getcwd()),
+        vim.fs.normalize(h.cwd),
+        "in the project's directory"
+      )
+      local text = table.concat(warned, "\n")
+      assert.truthy(text:find("reopened in the project's directory", 1, true), text)
+      assert.truthy(text:find("docs/: ", 1, true), text)
+    end)
   end)
 
   it("a restored direct run ends the way its saved close says", function()
