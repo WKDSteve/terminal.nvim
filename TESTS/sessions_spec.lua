@@ -41,6 +41,7 @@ describe("terminal.sessions (definitions and a fake facade)", function()
       run = function(cmd, opts)
         calls[#calls + 1] = { "run", opts.name, table.concat(cmd, " "), opts.cwd, opts.direct }
         -- The whole options of each run, by name (a named key: `#calls` and calls[i] stay as they are).
+        ---@diagnostic disable-next-line: inject-field
         calls.run_opts = calls.run_opts or {}
         calls.run_opts[opts.name] = opts
         if fail_for[opts.name] then

@@ -15,7 +15,7 @@ M.REFRESH_MS = 15000
 ---@class Terminal.RepoPanelState
 ---@field buf? integer
 ---@field win? integer
----@field timer? userdata
+---@field timer? uv.uv_timer_t
 ---@field rows Terminal.RepoRow[]
 
 ---@class Terminal.RepoPanelOpts

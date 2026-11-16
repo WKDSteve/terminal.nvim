@@ -128,6 +128,8 @@ describe("terminal.repos.classify CI", function()
 
   it("offers no command for a directory name a shell would read as more than a word", function()
     for _, bad in ipairs({ "a b", "x;rm -rf ~", "$(id)", "a`b`", "a&b", "", "a\nb" }) do
+      -- the sha left out on purpose: the name alone already refuses
+      ---@diagnostic disable-next-line: missing-parameter
       assert.is_nil(classify.trust_command(bad), bad)
     end
   end)

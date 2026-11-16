@@ -138,9 +138,12 @@ function _G.fake_multiplexer(panes_text)
   _G.MUX = state
   local wezterm = require("terminal.backends.wezterm")
   local new = wezterm.new
+  -- test doubles over the backend's own functions
+  ---@diagnostic disable-next-line: duplicate-set-field
   wezterm.available = function()
     return true, nil
   end
+  ---@diagnostic disable-next-line: duplicate-set-field
   wezterm.new = function(registry)
     return new(registry, run, "7")
   end

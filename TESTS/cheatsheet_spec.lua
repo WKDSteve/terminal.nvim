@@ -147,6 +147,8 @@ describe("terminal.cheatsheet.parse", function()
       assert.is_nil(parse.command_of("| `<C-r>` | search the history |"))
       assert.is_nil(parse.command_of("| `:Terminal list` | pick |"))
       assert.is_nil(parse.command_of("|---|---|"))
+      -- a wrong type on purpose: nil is what the function must survive
+      ---@diagnostic disable-next-line: param-type-mismatch
       assert.is_nil(parse.command_of(nil))
     end)
 
@@ -336,6 +338,8 @@ describe("terminal.cheatsheet (finding and loading sheets)", function()
   it("a key can never leave the folders", function()
     assert.is_nil(sheets.find("../x"))
     assert.is_nil(sheets.find("a/b"))
+    -- a wrong type on purpose: nil is what the function must survive
+    ---@diagnostic disable-next-line: param-type-mismatch
     assert.is_nil(sheets.find(nil))
     -- an odd key falls back to common instead of failing
     assert.equals("common", assert(sheets.load("../etc/passwd")).key)
@@ -717,6 +721,8 @@ describe("terminal.cheatsheet on a real terminal (the facade)", function()
 
   it("a bad cheatsheet table in setup() is reported and the defaults stay", function()
     local config = require("terminal.config")
+    -- wrong types on purpose: setup() must report them
+    ---@diagnostic disable-next-line: assign-type-mismatch
     local problems = config.setup({ cheatsheet = { shell = 7, dir = {}, shells = "x", other = 1 } })
     assert.equals(4, #problems)
     assert.equals("", config.get("cheatsheet.shell"))
