@@ -16,7 +16,9 @@ lib.nvim, testing.nvim and docmap.nvim are found through `$LIB_NVIM_DIR`, `$TEST
 ## Types
 
 `scripts/luals-check.sh` runs the language server over `lua/` and `TESTS/` and fails on any finding at
-Warning level. The target is **zero**, and it is zero today. The library paths (Neovim's runtime,
+Warning level. The target is **zero**, and CI holds it there (job `luals`, Linux, a pinned
+`lua-language-server` release). Without the binary the script exits 1 and says so; it never passes
+without having checked. The library paths (Neovim's runtime,
 lib.nvim, testing.nvim) differ per machine, so the script writes a throw-away config instead of
 `.luarc.json` carrying them. `vim` stays a known global in `.luarc.json` deliberately: the runtime
 library is not part of this repository. The specs' own globals (`describe`, `it`, the hooks) are

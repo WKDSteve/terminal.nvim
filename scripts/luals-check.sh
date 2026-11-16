@@ -12,7 +12,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-command -v lua-language-server >/dev/null || { echo "luals-check: lua-language-server not found" >&2; exit 1; }
+command -v lua-language-server >/dev/null || {
+  # in GitHub Actions as an error annotation, so a runner without the tool shows up as such on the run page
+  [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error title=luals-check::lua-language-server is not on PATH of this runner"
+  echo "luals-check: lua-language-server not found (nothing was checked)" >&2
+  exit 1
+}
 command -v nvim >/dev/null || { echo "luals-check: nvim not found" >&2; exit 1; }
 
 dep() { # name, env value
