@@ -5,8 +5,8 @@ One compound command, `:Terminal <action> [args] [flags]`, with `<Tab>` completi
 | Command | Does |
 |---|---|
 | `:Terminal` | Toggle the default terminal. |
-| `:Terminal toggle [name] [--layout=]` | Focus when visible elsewhere, hide when focused, show when hidden, create when missing. |
-| `:Terminal open [name] [--layout=]` | Show and focus; create when needed. |
+| `:Terminal toggle [name] [--layout=] [--dir=]` | Focus when visible elsewhere, hide when focused, show when hidden, create when missing. |
+| `:Terminal open [name] [--layout=] [--dir=]` | Show and focus; create when needed. |
 | `:Terminal hide [name]` | Close the window; the job keeps running. |
 | `:Terminal close [name]` | Stop the job and remove the terminal. |
 | `:Terminal pin [name] [--backend=tmux\|wezterm] [--layout=]` | Restart a native terminal as a pane of tmux/WezTerm so it outlives Neovim (see below). |
@@ -14,13 +14,16 @@ One compound command, `:Terminal <action> [args] [flags]`, with `<Tab>` completi
 | `:Terminal list` | Pick one of this project's terminals: open it, close it (`<C-x>`) or send it a line (`<C-s>`, Enter included); see "Picker" below. |
 | `:Terminal repos` | Float with one line per repository of the open terminals: local state and CI of the newest push (green, red, running, queued, waiting for approval); see [repos.md](repos.md). |
 | `:Terminal cheat [shell]` | Cheatsheet of the shell this terminal runs, one section at a time; see [cheatsheet.md](cheatsheet.md). |
-| `:Terminal send line [name] [--exec]` | Type the current line. |
-| `:'<,'>Terminal send selection [name] [--exec]` | Type the selection (see below). |
-| `:Terminal send file [name] [--exec]` | Type the whole buffer. |
-| `:Terminal run [--name=] [--layout=] [--direct] <command...>` | Run a command (see below). |
+| `:Terminal send line [name] [--exec] [--dir=]` | Type the current line. |
+| `:'<,'>Terminal send selection [name] [--exec] [--dir=]` | Type the selection (see below). |
+| `:Terminal send file [name] [--exec] [--dir=]` | Type the whole buffer. |
+| `:Terminal run [--name=] [--layout=] [--dir=] [--direct] <command...>` | Run a command (see below). |
 
 `name` defaults to the configured `default_name` (`main`); `3` is the terminal "3" that
-`3<A-h>` uses. `--layout=` is `float`, `split`, `vsplit` or `tab`.
+`3<A-h>` uses. `--layout=` is `float`, `split`, `vsplit` or `tab`. `--dir=` is a directory, as
+`target.dir` of the Lua API: the terminal belongs to the project of that directory, starts there when
+it is new, and without a name it is named after the folder (`docs/api/`). `~` and `$VAR` are
+expanded; what is not a directory is refused before anything opens.
 
 `<Tab>` completes `name` from the terminals that are open in this project, read when you press the
 key. `hide`, `close`, `pin` and `adopt` offer only those; `toggle`, `open`, `send` and `--name=`

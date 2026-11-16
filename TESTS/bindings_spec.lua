@@ -334,6 +334,48 @@ describe("terminal bindings", function()
       assert.equals(0, h.exit_code)
     end)
 
+    it("open --dir= starts a terminal in the folder, named after it", function()
+      terminal.setup({ shell = jobs.sleeper(), start_insert = false })
+      local saved_cwd = vim.fn.getcwd()
+      local base = vim.fs.normalize(vim.fn.tempname() .. "-cmd-dir")
+      local docs = base .. "/proj/docs"
+      vim.fn.mkdir(base .. "/proj/.git", "p")
+      vim.fn.mkdir(docs, "p")
+      vim.cmd("cd " .. vim.fn.fnameescape(base .. "/proj"))
+      local ok, err = pcall(function()
+        vim.cmd("Terminal open --dir=" .. vim.fn.fnameescape(docs))
+        local h = terminal.list()[1]
+        assert.is_not_nil(h, "a terminal was opened")
+        assert.equals("docs/", h.name, "named after the folder")
+        assert.equals(docs, vim.fs.normalize(h.cwd), "started in the folder")
+        jobs.settle()
+        terminal.close({ name = h.name })
+
+        -- not a directory: refused before anything opens
+        -- (the composer reports it on the command line: "flag '--dir': '...' is not a directory")
+        pcall(function()
+          vim.cmd("silent! Terminal open --dir=" .. vim.fn.fnameescape(base .. "/missing"))
+        end)
+        assert.equals(0, #terminal.list(), "a missing directory opens nothing")
+      end)
+      vim.cmd("cd " .. vim.fn.fnameescape(saved_cwd))
+      vim.fn.delete(base, "rf")
+      assert(ok, err)
+    end)
+
+    it("run takes --dir= among its leading flags, expanded", function()
+      local opts, command = require("terminal.bindings.usrcmds").parse_run({
+        "run",
+        "--dir=~/x",
+        "--name=job",
+        "make",
+        "--dir=y",
+      })
+      assert.equals(vim.fs.normalize(vim.uv.os_homedir() .. "/x"), vim.fs.normalize(opts.dir))
+      assert.equals("job", opts.name)
+      assert.same({ "make", "--dir=y" }, command, "a --dir= after the command is the command's")
+    end)
+
     it("run keeps dashed words of the command after --", function()
       local opts, command = require("terminal.bindings.usrcmds").parse_run({
         "run",

@@ -3,7 +3,7 @@
 --- completion (`lib.nvim.bindings.usercmd.composer`).
 ---
 ---   :Terminal                          toggle the default terminal
----   :Terminal toggle|open [name] [--layout=]
+---   :Terminal toggle|open [name] [--layout=] [--dir=]
 ---                                      show / focus (create when missing); `3` is the terminal "3"
 ---   :Terminal hide|close [name]
 ---   :Terminal pin [name] [--backend=] [--layout=]
@@ -11,10 +11,12 @@
 ---   :Terminal adopt [name]             view a multiplexer pane's screen in a read-only buffer
 ---   :Terminal list                     pick one of this project's terminals
 ---   :Terminal repos                    local state and CI of the repositories of the open terminals
----   :Terminal send line|selection|file [name] [--exec]
----   :Terminal run [--name=] [--layout=] [--direct] [--] <command...>
+---   :Terminal send line|selection|file [name] [--exec] [--dir=]
+---   :Terminal run [--name=] [--layout=] [--dir=] [--direct] [--] <command...>
 ---
---- `--layout=` takes float, split, vsplit or tab; `--backend=` takes tmux or wezterm.
+--- `--layout=` takes float, split, vsplit or tab; `--backend=` takes tmux or wezterm. `--dir=` is a
+--- directory, as `target.dir` of the Lua API: the terminal belongs to its project, starts there
+--- when it is new and, without a name, is named after the folder.
 ---@see lib.nvim.bindings.usercmd.composer
 
 local notify = require("terminal.notify")
@@ -149,12 +151,23 @@ local LAYOUT_FLAG = {
 }
 
 ---@internal
+--- `--dir=`: the directory of `target.dir`. The composer's DIR type expands `~` and `$VAR` and
+--- refuses what is not a directory before the command runs.
+---@type Lib.UserCmd.Composer.FlagSpec
+local DIR_FLAG = {
+  name = "dir",
+  type = "DIR",
+  desc = "Directory: the terminal starts there, in its project, named after it",
+}
+
+---@internal
 ---@param ctx Lib.UserCmd.Composer.Ctx
 ---@return Terminal.Target
 local function target_of(ctx)
   return {
     name = ctx.args.name,
     layout = ctx.flags.layout,
+    dir = ctx.flags.dir,
   }
 end
 
@@ -349,6 +362,7 @@ local function send_route(what)
         desc = what == "line" and "Press Enter after the line so the shell runs it"
           or "Press Enter after the text (required for several lines)",
       },
+      DIR_FLAG,
     },
     desc = ("Send the %s to a terminal (typed only; --exec presses Enter)"):format(what),
     run = function(ctx)
@@ -369,6 +383,7 @@ local function send_route(what)
       require("terminal").send(text, {
         name = ctx.args.name,
         newline = ctx.flags.exec == true,
+        dir = ctx.flags.dir,
       })
     end,
   }
@@ -379,8 +394,10 @@ end
 --- The words come from the unparsed command line (`ctx.raw.fargs`), so what follows the flags is
 --- passed on **verbatim**: a `--` ends the flags and is itself dropped, any later `--word` or a
 --- second `--` stays part of the command.
+--- `--dir=` is expanded (`~`, `$VAR`) the way the composer's DIR type does it; whether it is a
+--- directory is checked by `run` itself.
 ---@param fargs string[] Words of the command line, starting with the subcommand `run`
----@return Terminal.RunOpts opts # name / layout / direct
+---@return Terminal.RunOpts opts # name / layout / dir / direct
 ---@return string[] command
 function M.parse_run(fargs)
   local opts = {}
@@ -396,6 +413,8 @@ function M.parse_run(fargs)
       opts.name = w:sub(8)
     elseif w:find("^%-%-layout=") then
       opts.layout = w:sub(10)
+    elseif w:find("^%-%-dir=") then
+      opts.dir = require("lib.nvim.cross.fs.expand_path")(w:sub(7))
     else
       break
     end
@@ -435,7 +454,7 @@ function M.setup()
       {
         path = { "toggle" },
         args = NAME_ARG,
-        flags = LAYOUT_FLAG,
+        flags = { LAYOUT_FLAG[1], DIR_FLAG },
         desc = 'Toggle a terminal (the name "3" is the toggle key with count 3)',
         run = function(ctx)
           terminal.toggle(target_of(ctx))
@@ -444,7 +463,7 @@ function M.setup()
       {
         path = { "open" },
         args = NAME_ARG,
-        flags = LAYOUT_FLAG,
+        flags = { LAYOUT_FLAG[1], DIR_FLAG },
         desc = "Show and focus a terminal, creating it when needed",
         run = function(ctx)
           terminal.open(target_of(ctx))
@@ -565,6 +584,7 @@ function M.setup()
             desc = "Start the command as the terminal's job, no shell",
           },
           LAYOUT_FLAG[1],
+          DIR_FLAG,
         },
         desc = "Run a command (typed as a line; --direct starts it as the job itself); put -- before a command with dashed words",
         run = function(ctx)

@@ -34,8 +34,14 @@ docs/backends.md, docs/status.md and docs/navigation.md.
 
                                                                    *:Terminal*
 :Terminal                       Toggle the default terminal.
-:Terminal toggle [name] [--layout=] Focus / hide / show / create.
-:Terminal open [name] [--layout=]   Show and focus; create when needed.
+:Terminal toggle [name] [--layout=] [--dir=]
+                                Focus / hide / show / create.
+:Terminal open [name] [--layout=] [--dir=]
+                                Show and focus; create when needed.
+                                --dir= a directory: the terminal belongs to
+                                its project, starts there and, without a
+                                name, is named after the folder (also on
+                                send and run).
 :Terminal hide [name]           Close the window, keep the job.
 :Terminal close [name]          Stop the job and remove the terminal.
 :Terminal pin [name] [--backend=] [--layout=]
