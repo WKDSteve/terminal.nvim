@@ -58,12 +58,15 @@ function M.process_alive(pid)
   return vim.uv.kill(pid, 0) == 0
 end
 
---- Wait until `pred()` is true (up to `ms`).
+--- Wait until `pred()` is true (up to `ms`, default 15 s). The default is a ceiling for a loaded
+--- machine, not an expectation: `cmd /c exit 0` once took longer than 5 s to end while other suites
+--- ran in parallel (api_spec "an exited terminal is replaced", 2026-11-16). No spec waits for a
+--- predicate to stay false, so only a real failure pays for the ceiling.
 ---@param pred fun(): boolean
 ---@param ms? integer
 ---@return boolean
 function M.wait(pred, ms)
-  return vim.wait(ms or 5000, pred, 20)
+  return vim.wait(ms or 15000, pred, 20)
 end
 
 --- Windows only: Neovim 0.12's ConPTY teardown races. A terminal that is closed within a few
