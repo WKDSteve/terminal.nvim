@@ -14,10 +14,21 @@
 local this = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p")
 local root = vim.fs.dirname(vim.fs.dirname(vim.fs.normalize(this)))
 
-local DEPS = { "testing.nvim", "lib.nvim" }
+local DEPS = { "testing.nvim", "lib.nvim", "sessions.nvim" }
+
+-- Found like the others, but optional and left off the runtimepath: the specs fire the events of
+-- sessions.nvim themselves. The test sheet of a session (TESTS/sheets/terminal-session-moved.sheet.lua)
+-- drives the real one and adds it in its child editor (vim.g.terminal_sheets_sessions_nvim); without
+-- it that sheet is skipped.
+---@type table<string, true>
+local SHEETS_ONLY = { ["sessions.nvim"] = true }
 
 ---@type table<string, string>
-local MARKERS = { ["lib.nvim"] = "lua/lib/nvim", ["testing.nvim"] = "lua/testing" }
+local MARKERS = {
+  ["lib.nvim"] = "lua/lib/nvim",
+  ["testing.nvim"] = "lua/testing",
+  ["sessions.nvim"] = "lua/sessions",
+}
 
 ---@param name string
 ---@return string
@@ -60,7 +71,7 @@ for _, name in ipairs(DEPS) do
   end
   if hit then
     found[name] = hit
-  else
+  elseif not SHEETS_ONLY[name] then
     local lines = { ("error: dependency '%s' not found. Searched, in this order:"):format(name) }
     for i, p in ipairs(places) do
       lines[#lines + 1] = ("  %d. %s (%s)"):format(i, p[1], p[2] or "unset")
@@ -80,7 +91,10 @@ end
 
 vim.opt.rtp:prepend(root)
 for _, name in ipairs(DEPS) do
-  vim.opt.rtp:append(found[name])
+  if not SHEETS_ONLY[name] then
+    vim.opt.rtp:append(found[name])
+  end
 end
+vim.g.terminal_sheets_sessions_nvim = found["sessions.nvim"]
 
 return { root = root, deps = found }

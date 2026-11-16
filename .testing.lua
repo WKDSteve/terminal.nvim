@@ -12,7 +12,7 @@ return {
   isolated = "file",
   host = "c",
   -- The worktree of `ci commit` has no sibling checkouts: the child editors of the sheets find them this way.
-  env_allow = { "LIB_NVIM_DIR", "TESTING_NVIM_DIR" },
+  env_allow = { "LIB_NVIM_DIR", "TESTING_NVIM_DIR", "SESSIONS_NVIM_DIR" },
   -- A case without assertions fails: a spec that asserts nothing proves nothing.
   assertions = "error",
   -- Real shells are started by some specs (a PowerShell property run takes 5-10 s on a machine

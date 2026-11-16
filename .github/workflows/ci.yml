@@ -80,6 +80,12 @@ jobs:
           repository: "WKDSteve/testing.nvim"
           path: .deps/testing.nvim
           ref: ci-verified
+      # sessions.nvim only for the test sheet of a session (TESTS/minimal_init.lua: SHEETS_ONLY); main
+      # moves only on a green run there (testing ci land).
+      - uses: actions/checkout@v5
+        with:
+          repository: "WKDSteve/sessions.nvim"
+          path: .deps/sessions.nvim
       # windows-latest's default shell is pwsh, not bash -- scripts/test.sh
       # is a bash script (Git for Windows ships one on every windows-latest
       # runner, actions/checkout already needs it).
