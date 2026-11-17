@@ -3,7 +3,7 @@ return {
   id = "terminal.cheat",
   feature = "terminal.cheat",
   title = "terminal.nvim: :Terminal cheat pages, closes and types the line",
-  task = "terminal.nvim/testblatt-bindings-checkliste",
+  task = "terminal.nvim/live-check",
   steps = {
     {
       lua = [[dofile(vim.fn.getcwd() .. "/TESTS/sheets/_helpers.lua")

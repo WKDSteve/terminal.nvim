@@ -3,7 +3,7 @@ return {
   id = "terminal.toggle",
   feature = "terminal.toggle",
   title = "terminal.nvim: <A-h>, <Esc> and :Terminal toggle, open, hide, close",
-  task = "terminal.nvim/testblatt-bindings-checkliste",
+  task = "terminal.nvim/live-check",
   steps = {
     {
       lua = [[dofile(vim.fn.getcwd() .. "/TESTS/sheets/_helpers.lua")

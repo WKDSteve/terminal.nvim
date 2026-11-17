@@ -4,7 +4,7 @@ return {
   id = "terminal.send",
   feature = "terminal.send",
   title = "terminal.nvim: :Terminal send line, selection, file and :Terminal run",
-  task = "terminal.nvim/testblatt-bindings-checkliste",
+  task = "terminal.nvim/live-check",
   steps = {
     {
       lua = [[dofile(vim.fn.getcwd() .. "/TESTS/sheets/_helpers.lua")

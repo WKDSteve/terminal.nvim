@@ -5,7 +5,7 @@ return {
   id = "terminal.session-folder",
   feature = "terminal.sessions",
   title = "terminal.nvim: a session brings a folder's terminal back in its folder, or in the project when it is gone",
-  task = "terminal.nvim/session-restore-starts-a-folder-terminal-in-its-folder",
+  task = "terminal.nvim/live-check",
   requires = {
     {
       lua = [[vim.g.terminal_sheets_sessions_nvim ~= nil]],
