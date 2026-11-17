@@ -68,8 +68,8 @@ return {
     { keys = ":Session load work<CR>" },
     { wait = [[_G.term("docs/") ~= nil]], timeout = 8000 },
     {
-      expect = [[vim.fs.normalize(_G.term("docs/").cwd) == vim.fs.normalize(_G.NEW .. "/docs")]],
-      note = "back in docs/ of the new place",
+      expect = [[vim.uv.fs_realpath(_G.term("docs/").cwd) == vim.uv.fs_realpath(_G.NEW .. "/docs")]],
+      note = "back in docs/ of the new place (real paths: macOS's temp directory is a symlink)",
     },
     { expect = [[not _G.noted("reopened in the project's directory")]], note = "and not moved" },
   },
