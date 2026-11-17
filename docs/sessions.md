@@ -77,8 +77,9 @@ which it passes along in the events:
   `proj`).
 - With `root_remap` the events carry that table, and a load translates the absolute directories
   through it (old prefix -> new prefix, at a path boundary), as sessions.nvim does for the session
-  file. A key for a path below the home directory has to match the absolute path here (the
-  sidecar does not write `~`).
+  file. A key (or target) in `~` form (`["~/work"] = "~/projects"`) stands for the path below the
+  home directory, which is how the sidecar stores it; an explicit key for the same absolute path
+  wins.
 - A sidecar written before (or without these options) has absolute directories and loads as it
   always did. A relative directory loaded without a `root` (the option turned off since) is put
   below the working directory, where sessions.nvim re-anchors the session too.

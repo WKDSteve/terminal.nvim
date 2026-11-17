@@ -43,17 +43,44 @@ local GROUP = "terminal.sessions"
 --- The placeholder for the session root in a sidecar, the one sessions.nvim writes into the session.
 M.PLACEHOLDER = "{{SESSION_ROOT}}"
 
---- The anchor of an event's `data`, reduced to what is safe to use.
+--- `path` with a leading `~` (alone or before a slash) spelled as the home directory; anything
+--- else as it is. The sidecar stores directories absolute, so a `root_remap` written as `~/...`
+--- (as sessions.nvim accepts it for the session file) has to match that spelling.
+---@param path string
+---@return string
+local function expand_home(path)
+  if path ~= "~" and not path:find("^~[/\\]") then
+    return path
+  end
+  local home = vim.fs.normalize(vim.fn.expand("~")):gsub("/+$", "")
+  local rest = path:sub(2):gsub("\\", "/")
+  return home .. rest
+end
+
+--- The anchor of an event's `data`, reduced to what is safe to use. A `root_remap` key or value
+--- in `~` form is spelled out as the home directory (the key is kept as written, too); an
+--- explicit key for the spelled-out path wins.
 ---@param data table
 ---@return Terminal.SessionsAnchor
 function M.anchor(data)
-  local remap
+  local remap, spelled_keys
   if type(data.root_remap) == "table" then
     for old_root, new_root in pairs(data.root_remap) do
       if type(old_root) == "string" and old_root ~= "" and type(new_root) == "string" then
         remap = remap or {}
+        new_root = expand_home(new_root)
         remap[old_root] = new_root
+        local spelled = expand_home(old_root)
+        if spelled ~= old_root then
+          spelled_keys = spelled_keys or {}
+          spelled_keys[spelled] = new_root
+        end
       end
+    end
+  end
+  for key, new_root in pairs(spelled_keys or {}) do
+    if remap[key] == nil then
+      remap[key] = new_root
     end
   end
   return {

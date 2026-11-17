@@ -457,6 +457,26 @@ describe("terminal.sessions (definitions and a fake facade)", function()
         sessions.anchor({ root = "/r", root_remap = { ["/a"] = "/b", bad = false } })
       )
     end)
+
+    it("a root_remap key in ~ form matches the absolute directory below the home", function()
+      local home = vim.fs.normalize(vim.fn.expand("~")):gsub("/+$", "")
+      local anchor = sessions.anchor({ root_remap = { ["~/old/proj"] = "~/new/proj" } })
+      assert.equals(
+        home .. "/new/proj/docs",
+        sessions.resolve_cwd(home .. "/old/proj/docs", anchor),
+        "the sidecar stores the directory absolute; key and target are spelled out"
+      )
+      assert.equals(
+        home .. "/old/proj-x",
+        sessions.resolve_cwd(home .. "/old/proj-x", anchor),
+        "still only at a path boundary"
+      )
+      local both = sessions.anchor({
+        root_remap = { ["~/old"] = "/from-tilde", [home .. "/old"] = "/explicit" },
+      })
+      assert.equals("/explicit", both.root_remap[home .. "/old"], "an explicit absolute key wins")
+      assert.equals("/from-tilde", both.root_remap["~/old"])
+    end)
   end)
 
   describe("load", function()
