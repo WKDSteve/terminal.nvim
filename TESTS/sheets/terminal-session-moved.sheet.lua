@@ -5,7 +5,7 @@ return {
   id = "terminal.session-moved",
   feature = "terminal.sessions",
   title = "terminal.nvim: a session's terminal follows the project to its new place",
-  task = "terminal.nvim/terminal-sidecar-follows-sessions-nvim-s-relative-paths-root",
+  task = "terminal.nvim/abnahme-session-terminals-nach-umzug-auf-anderen-rechner",
   requires = {
     {
       lua = [[vim.g.terminal_sheets_sessions_nvim ~= nil]],
