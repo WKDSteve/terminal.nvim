@@ -5,7 +5,7 @@ return {
   id = "terminal.repos",
   feature = "terminal.repos",
   title = "terminal.nvim: :Terminal repos shows the local git state and the CI line of the terminals' repositories",
-  task = "terminal.nvim/performance-pruefung-luecken-schliessen-katalog-feature-shee",
+  task = "terminal.nvim/live-check",
   fakes = { "gh" },
   steps = {
     {

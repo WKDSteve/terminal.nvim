@@ -5,7 +5,7 @@ return {
   id = "terminal.status-tmux",
   feature = "terminal.status-export",
   title = "terminal.nvim: inside tmux a mode change and a new file start `tmux set-option -p` on this pane",
-  task = "terminal.nvim/performance-pruefung-luecken-schliessen-katalog-feature-shee",
+  task = "terminal.nvim/live-check",
   fakes = { "tmux" },
   steps = {
     {

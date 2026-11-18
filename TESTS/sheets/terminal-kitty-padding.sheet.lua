@@ -5,7 +5,7 @@ return {
   id = "terminal.kitty-padding",
   feature = "terminal.kitty-padding",
   title = "terminal.nvim: inside Kitty the padding is snug while editing and restored on exit",
-  task = "terminal.nvim/performance-pruefung-luecken-schliessen-katalog-feature-shee",
+  task = "terminal.nvim/live-check",
   fakes = { "kitty" },
   steps = {
     {

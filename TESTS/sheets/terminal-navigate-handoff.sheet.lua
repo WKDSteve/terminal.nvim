@@ -5,7 +5,7 @@ return {
   id = "terminal.navigate-handoff",
   feature = "terminal.navigate",
   title = "terminal.nvim: inside tmux the edge keys start `tmux select-pane`, from normal and terminal mode",
-  task = "terminal.nvim/performance-pruefung-luecken-schliessen-katalog-feature-shee",
+  task = "terminal.nvim/live-check",
   fakes = { "tmux" },
   steps = {
     {
