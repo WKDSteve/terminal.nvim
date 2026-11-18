@@ -52,7 +52,8 @@ describe("terminal.core.context (real editor)", function()
         "/c",
         ('for %%I in ("%s") do @echo %%~sI'):format((repo:gsub("/", "\\"))),
       })
-      local short = vim.trim(out)
+      -- `vim.fn.system` is typed `boolean|string|...` in newer runtimes: it is the output text here.
+      local short = vim.trim(tostring(out))
       if short == "" or short:lower() == repo:gsub("/", "\\"):lower() then
         -- Inside a running case busted's pending(name) alone marks it pending; the stub also wants a block.
         ---@diagnostic disable-next-line: missing-parameter
