@@ -41,6 +41,9 @@ return {
     id = "terminal.backends",
     title = "Terminals run as Neovim's own :terminal or as panes of tmux or WezTerm",
     docs = "docs/backends.md",
+    -- The native backend is what every other sheet measures; tmux and WezTerm panes are processes of a running
+    -- multiplexer that the sheets replace with an in-memory CLI (TESTS/support/fakes.lua).
+    perf = "manual:tmux and WezTerm panes need a running multiplexer server or GUI (the native backend is measured by every sheet)",
   },
   {
     id = "terminal.pin-adopt",
@@ -57,6 +60,7 @@ return {
     id = "terminal.ask",
     title = "A git hook or a script in a terminal asks its question in a Neovim dialog",
     docs = "docs/ask.md",
+    perf = "skip:the plugin starts no process for it; the client nvim-ask runs in the terminal's own shell and asks over RPC",
   },
   {
     id = "terminal.repos",
@@ -68,5 +72,11 @@ return {
     id = "terminal.status-export",
     title = "Mode, file, branch and diagnostics are exported to tmux and the WezTerm tab title and status",
     docs = "docs/status.md",
+  },
+  {
+    id = "terminal.kitty-padding",
+    title = "Inside Kitty the window padding is snug while Neovim edits and restored when it quits",
+    surface = { "config:kitty.enable" },
+    docs = "docs/configuration.md",
   },
 }

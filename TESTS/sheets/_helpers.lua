@@ -149,6 +149,36 @@ function _G.fake_multiplexer(panes_text)
   end
 end
 
+---The calls of the program stand-in `program` (a sheet's `fakes`): a real process the plugin started, recorded
+---instead of run. Each call: `{ program, argv, cwd }`.
+---@param program string
+---@return { program: string, argv: string[], cwd: string }[]
+function _G.fake_calls(program)
+  return require("testing.fake_programs").read(vim.env.TESTING_FAKES, program)
+end
+
+---Whether a call of the stand-in `program` had all of `words` among its arguments (in any order).
+---On Windows an empty argument ends what a `.cmd` stand-in records: ask for the arguments before one.
+---@param program string
+---@param words string[]
+---@return boolean
+function _G.fake_called(program, words)
+  for _, call in ipairs(_G.fake_calls(program)) do
+    local have = {}
+    for _, arg in ipairs(call.argv) do
+      have[arg] = true
+    end
+    local all = true
+    for _, w in ipairs(words) do
+      all = all and have[w] == true
+    end
+    if all then
+      return true
+    end
+  end
+  return false
+end
+
 ---Whether the fake multiplexer was asked for `sub` (`split-pane`, `kill-pane`, ...).
 ---@param sub string
 ---@return boolean
