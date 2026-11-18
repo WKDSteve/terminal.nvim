@@ -13,7 +13,12 @@ return {
       -- Neovim runs in a tmux pane: the hand-off reads the environment when it is set up.
       vim.env.TMUX = "/tmp/tmux-1000/default,1,0"
       vim.env.TMUX_PANE = "%7"
-      _G.setup({ keymaps = { nav_left = "<C-h>", nav_right = "<C-l>", window_right = "<C-l>" } })]],
+      -- The status export would start tmux too (terminal-status-tmux.sheet.lua): two stand-ins writing one log at
+      -- once can lose a line on Windows, so only the hand-off is recorded here.
+      _G.setup({
+        status = { enable = false },
+        keymaps = { nav_left = "<C-h>", nav_right = "<C-l>", window_right = "<C-l>" },
+      })]],
     },
 
     {
@@ -26,6 +31,7 @@ return {
       note = "a real process was started for it",
     },
     { expect = [[#vim.api.nvim_list_wins() == 1]], note = "Neovim's own windows stay as they are" },
+    { expect = [[#_G.fake_calls("tmux") == 1]], note = "one key, one process" },
 
     { keys = ":Terminal open nav --layout=split<CR>", note = "a terminal below" },
     { wait = [[_G.ready("nav") and vim.api.nvim_get_mode().mode == "t"]], timeout = 8000 },
