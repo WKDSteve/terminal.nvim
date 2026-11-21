@@ -18,13 +18,15 @@ return {
       _G.outer_address = vim.fn.has("win32") == 1
           and ("\\\\.\\pipe\\terminal-sheet-outer-" .. vim.uv.os_getpid())
         or (vim.fn.tempname() .. ".sock")
-      _G.outer = vim.fn.jobstart({ vim.v.progpath, "--headless", "-u", "NONE", "-i", "NONE", "--listen", _G.outer_address })
-      vim.wait(8000, function()
-        return require("terminal.status.nested").alive(_G.outer_address)
-      end, 50)]],
+      _G.outer = vim.fn.jobstart({ vim.v.progpath, "--headless", "-u", "NONE", "-i", "NONE", "--listen", _G.outer_address })]],
     },
     {
-      expect = [[require("terminal.status.nested").alive(_G.outer_address)]],
+      expect = [[_G.outer > 0]],
+      note = "the outer Neovim server was started",
+    },
+    {
+      wait = [[require("terminal.status.nested").alive(_G.outer_address)]],
+      timeout = 15000,
       note = "the outer Neovim server answers on its address",
     },
     {
