@@ -135,6 +135,17 @@ jobs:
       - name: Install tmux (Linux)
         if: matrix.hosted && runner.os == 'Linux'
         run: sudo apt-get install -y tmux
+      # the step luals (scripts/luals-check.sh): lua-language-server 3.18.2, the release tarball of LuaLS checked
+      # against its pinned sha256 (testing.ci.workflow.SHA256.luals), on the leg with the whole profile.
+      - if: matrix.hosted && matrix.steps == ''
+        shell: bash
+        run: |
+          tarball="$RUNNER_TEMP/luals.tar.gz"
+          curl -fsSL -o "$tarball" "https://github.com/LuaLS/lua-language-server/releases/download/3.18.2/lua-language-server-3.18.2-linux-x64.tar.gz"
+          echo "ca71415dd19f19e30aaa35a4915aefca9fdb5fec31b98331cc3d77f778d539c5  $tarball" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/luals"
+          tar -xzf "$tarball" -C "$RUNNER_TEMP/luals"
+          echo "$RUNNER_TEMP/luals/bin" >> "$GITHUB_PATH"
       # macOS: the runner's TMPDIR lies under /var/folders/.../T/, and a Unix socket below the sandbox of a child editor
       # (an RPC server, a pipe of fzf) then exceeds sun_path (104 bytes, ENOTSOCK). /tmp keeps those paths short. An
       # `env.TMPDIR` of ci.workflow still wins: it is the environment of the pipeline step itself.

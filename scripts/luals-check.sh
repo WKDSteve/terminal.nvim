@@ -4,8 +4,11 @@
 # Warning level or above. The library paths differ per machine, so they are not in .luarc.json:
 # this script writes a throw-away config with Neovim's runtime, lib.nvim and testing.nvim.
 #
-#   scripts/luals-check.sh            # exit 0: no findings; exit 1: findings (printed) or no tool
+#   scripts/luals-check.sh            # exit 0: no findings; exit 1: findings (printed);
+#                                     # no tool: 77 (skipped) on a local machine, 1 in GitHub Actions
 #
+# The step `luals` of .testing.lua runs it (skip_exit = 77); the hosted ubuntu leg has the pinned
+# lua-language-server of ci.workflow.luals, so there a missing tool is an error, not a skip.
 # lib.nvim and testing.nvim are found like in scripts/test.sh: $LIB_NVIM_DIR / $TESTING_NVIM_DIR,
 # then .deps/<name>, then a sibling checkout.
 
@@ -16,7 +19,8 @@ command -v lua-language-server >/dev/null || {
   # in GitHub Actions as an error annotation, so a runner without the tool shows up as such on the run page
   [ -n "${GITHUB_ACTIONS:-}" ] && echo "::error title=luals-check::lua-language-server is not on PATH of this runner"
   echo "luals-check: lua-language-server not found (nothing was checked)" >&2
-  exit 1
+  [ -n "${GITHUB_ACTIONS:-}" ] && exit 1
+  exit 77
 }
 command -v nvim >/dev/null || { echo "luals-check: nvim not found" >&2; exit 1; }
 

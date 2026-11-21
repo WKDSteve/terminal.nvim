@@ -498,14 +498,13 @@ describe("terminal.repos adopt (User ReposcopeCloned)", function()
   end)
 
   it("the event adopts the path; a failed payload is ignored", function()
-    require("terminal.bindings.autocmds").setup(
-      require("terminal.config").get and require("terminal.config").get()
-        or {
-          window_options = { enable = false },
-          auto_insert = { enable = false },
-          kitty = { enable = false },
-        }
-    )
+    -- the switches off, so only the event's own handler acts (config.get() without a path was always nil here)
+    local switches_off = {
+      window_options = { enable = false },
+      auto_insert = { enable = false },
+      kitty = { enable = false },
+    }
+    require("terminal.bindings.autocmds").setup(switches_off --[[@as Terminal.Config]])
     vim.api.nvim_exec_autocmds(
       "User",
       { pattern = "ReposcopeCloned", data = { path = "/tmp/ev", url = "u" } }

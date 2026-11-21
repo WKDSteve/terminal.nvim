@@ -55,8 +55,6 @@ return {
     },
   },
   -- The pipeline is derived (stylua, luacheck, suite, conformance); the steps below join the default profile.
-  -- Not in it yet: scripts/luals-check.sh, the hosted Linux leg has no pinned lua-language-server (tasks-vault
-  -- testing.nvim/ci-workflow-lua-language-server-gepinnt-auf-dem-linux-leg).
   ci = {
     -- The GitHub workflow, generated: `testing init --workflow=public --force` writes .github/workflows/ci.yml from
     -- this (testing.nvim docs/WORKFLOW-CI.md); the step workflow-in-sync keeps the two together.
@@ -65,6 +63,8 @@ return {
       layout = "hosted",
       -- the steps that depend on the platform: the windows and macOS legs run only these
       platform = { "suite", "conformance" },
+      -- lua-language-server on the hosted ubuntu leg, the release pinned by its sha256 in testing.nvim
+      luals = { version = "3.18.2", used_by = "the step luals (scripts/luals-check.sh)" },
       -- `testing ci land`: a check branch ci/** runs the hosted legs, main moves to a commit only once it is green there
       land = true,
       -- more checkouts below .deps/, not on the runtimepath of the specs
@@ -92,6 +92,9 @@ return {
     },
     steps = {
       ["workflow-in-sync"] = { preset = "workflow-in-sync" },
+      -- lua-language-server over lua/ and TESTS/ at Warning level (scripts/luals-check.sh writes the library paths);
+      -- the hosted ubuntu leg installs the pinned release (ci.workflow.luals), a machine without it skips (77)
+      luals = { run = { "bash", "scripts/luals-check.sh" }, skip_exit = 77, timeout = "8m" },
       -- the live smokes of the tmux backend and status exporter (TESTS/live/tmux.lua, nested.lua) against a real
       -- tmux; without tmux on PATH the step skips itself (77)
       ["tmux-live"] = {
