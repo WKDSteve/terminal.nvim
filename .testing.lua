@@ -55,8 +55,8 @@ return {
     },
   },
   -- The pipeline is derived (stylua, luacheck, suite, conformance); the steps below join the default profile.
-  -- Not in it yet (tasks-vault terminal.nvim/tmux-live-und-luals-in-die-generierte-ci): the tmux live smoke
-  -- (TESTS/live/*.lua, needs tmux on the Linux leg only) and scripts/luals-check.sh (needs lua-language-server).
+  -- Not in it yet: scripts/luals-check.sh, the hosted Linux leg has no pinned lua-language-server (tasks-vault
+  -- testing.nvim/ci-workflow-lua-language-server-gepinnt-auf-dem-linux-leg).
   ci = {
     -- The GitHub workflow, generated: `testing init --workflow=public --force` writes .github/workflows/ci.yml from
     -- this (testing.nvim docs/WORKFLOW-CI.md); the step workflow-in-sync keeps the two together.
@@ -80,9 +80,35 @@ return {
         version = "0.11.0",
         why = "the README promises Neovim 0.11+ (the old workflow had a v0.11.0 leg)",
       },
+      -- programs of the hosted legs; macOS and Windows run only the platform steps, which need none
+      packages = {
+        {
+          name = "tmux",
+          brew = false,
+          choco = false,
+          why = "the step tmux-live drives a real tmux server",
+        },
+      },
     },
     steps = {
       ["workflow-in-sync"] = { preset = "workflow-in-sync" },
+      -- the live smokes of the tmux backend and status exporter (TESTS/live/tmux.lua, nested.lua) against a real
+      -- tmux; without tmux on PATH the step skips itself (77)
+      ["tmux-live"] = {
+        run = {
+          "nvim",
+          "-n",
+          "-i",
+          "NONE",
+          "--headless",
+          "-u",
+          "NONE",
+          "-l",
+          "scripts/tmux_live.lua",
+        },
+        skip_exit = 77,
+        timeout = "8m",
+      },
     },
   },
 }

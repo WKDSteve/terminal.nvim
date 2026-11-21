@@ -128,6 +128,10 @@ jobs:
           echo "d68da17fca0697d9e2fb04201f3884abd259fa558b3a449bccaed47f1390defc  $RUNNER_TEMP/luacheck" | sha256sum -c -
           install -D -m 755 "$RUNNER_TEMP/luacheck" "$HOME/.local/bin/luacheck"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # tmux: the step tmux-live drives a real tmux server
+      - name: Install tmux (Linux)
+        if: matrix.hosted && runner.os == 'Linux'
+        run: sudo apt-get install -y tmux
       # The result cache (docs/CI-CACHE.md of testing.nvim). The key is only the transport: every entry carries its
       # own full spec key and is checked against it when read, so a wrong restore can lower the hit rate and never turn
       # a result green. A pull request only restores; only a push to main saves.
