@@ -498,12 +498,18 @@ describe("terminal.repos adopt (User ReposcopeCloned)", function()
   end)
 
   it("the event adopts the path; a failed payload is ignored", function()
-    require("terminal.bindings.autocmds").setup(require("terminal.config").get and require("terminal.config").get() or {
-      window_options = { enable = false },
-      auto_insert = { enable = false },
-      kitty = { enable = false },
-    })
-    vim.api.nvim_exec_autocmds("User", { pattern = "ReposcopeCloned", data = { path = "/tmp/ev", url = "u" } })
+    require("terminal.bindings.autocmds").setup(
+      require("terminal.config").get and require("terminal.config").get()
+        or {
+          window_options = { enable = false },
+          auto_insert = { enable = false },
+          kitty = { enable = false },
+        }
+    )
+    vim.api.nvim_exec_autocmds(
+      "User",
+      { pattern = "ReposcopeCloned", data = { path = "/tmp/ev", url = "u" } }
+    )
     vim.api.nvim_exec_autocmds("User", { pattern = "ReposcopeCloned" })
     assert.same(
       { "/tmp/ev" },
