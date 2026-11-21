@@ -17,7 +17,8 @@ return {
       -- A real second Neovim server plays the outer Neovim that $NVIM names.
       _G.outer_address = vim.fn.has("win32") == 1
           and ("\\\\.\\pipe\\terminal-sheet-outer-" .. vim.uv.os_getpid())
-        or (vim.fn.tempname() .. ".sock")
+        -- short on purpose: a unix socket path ends at ~104 bytes, and the temp dir of a CI snapshot is longer
+        or ("/tmp/terminal-sheet-outer-" .. vim.uv.os_getpid() .. ".sock")
       _G.outer = vim.fn.jobstart({ vim.v.progpath, "--headless", "-u", "NONE", "-i", "NONE", "--listen", _G.outer_address })]],
     },
     {
