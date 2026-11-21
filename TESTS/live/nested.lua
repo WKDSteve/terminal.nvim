@@ -60,10 +60,20 @@ vim.opt.rtp:prepend(%q)
 vim.opt.rtp:append(%q)
 local e = require("terminal.status.exporters.tmux")
 local nested = require("terminal.status.nested")
+local status = require("terminal.status")
+-- The exporter checks the nesting in the background once a UI is there: pretend one, and catch
+-- its verdict where it hands it to terminal.status (drop = the outer Neovim owns the pane).
+vim.api.nvim_list_uis = function() return { {} } end
+local verdict
+status.drop = function() verdict = "dropped" end
+status.request = function() verdict = "owner" end
 local env = { TMUX = vim.env.TMUX or "x", TMUX_PANE = vim.env.TMUX_PANE or "%%0", NVIM = vim.env.NVIM }
-local available, why = e.available(env)
+local available = e.available(env)
+local held = e.ready()
+vim.wait(10000, function() return verdict ~= nil end, 20)
 local o = assert(io.open(vim.env.RESULT_FILE, "w"))
-o:write(("%%s|%%s|%%s"):format(tostring(nested.alive(vim.env.NVIM or "")), tostring(available), tostring(why)))
+o:write(("%%s|%%s|%%s|%%s"):format(tostring(nested.alive(vim.env.NVIM or "")), tostring(available),
+  tostring(held), tostring(verdict)))
 o:close()
 vim.cmd("qa!")
 ]]):format(root, lib))
@@ -97,8 +107,8 @@ run_in_terminal(
 local nested = result(nested_file)
 check("the inner Neovim ran in a terminal of this one", nested ~= nil, nested)
 check(
-  "it sees this Neovim alive and is refused (nested)",
-  nested ~= nil and nested:find("^true|false|") ~= nil,
+  "it sees this Neovim alive, holds the status back and drops out once the check answers (nested)",
+  nested ~= nil and nested:find("^true|true|false|dropped$") ~= nil,
   nested
 )
 
@@ -120,8 +130,8 @@ check(
   pane
 )
 check(
-  "it shares $NVIM (this Neovim is alive) but is NOT nested: the exporter is available",
-  pane ~= nil and pane:find("^true|true|nil$") ~= nil,
+  "it shares $NVIM (this Neovim is alive) but is NOT nested: the exporter publishes once the check answers",
+  pane ~= nil and pane:find("^true|true|false|owner$") ~= nil,
   pane
 )
 
@@ -137,7 +147,7 @@ run_in_terminal(
 local custom_result = result(custom_file)
 check(
   "a custom listen name that looks like <appname>.<pid>.<n> does not fool it (still nested)",
-  custom_result ~= nil and custom_result:find("^true|false|") ~= nil,
+  custom_result ~= nil and custom_result:find("^true|true|false|dropped$") ~= nil,
   custom_result
 )
 

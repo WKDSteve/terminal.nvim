@@ -85,7 +85,9 @@ overwrite the outer one's status). A tmux server that was merely *started* from 
 owns its pane and exports. The outer Neovim's process id is **asked of the server** (a short-lived
 `nvim --headless --server <address> --remote-expr getpid()` with a 1.5 s timeout, only when `$NVIM` is set and
 answers; nothing is read from the address, so `NVIM_APPNAME`, a custom `--listen` name or a TCP address all work),
-the process tree comes from `/proc` (or `ps`). Where either cannot be found out — the outer Neovim is busy
+the process tree comes from `/proc` (or `ps`). The check runs in the background and starts with the first
+publication, not at setup: the start never waits for it, and the pane gets no status from this Neovim until it has
+answered (at most 1.5 s, usually 0.1-0.2 s). Where either cannot be found out — the outer Neovim is busy
 and does not answer in time, no readable process tree (Windows) — the nesting is *unknown*: this Neovim
 exports anyway and warns once per session (also in `auto`), instead of leaving the pane without a status in
 silence. Only a nesting that is positively known keeps it out. A nested editor that is taken for the owner clears

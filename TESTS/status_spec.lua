@@ -611,22 +611,33 @@ describe("terminal.status (publishing)", function()
     assert.same({}, writes)
   end)
 
-  it("choose: a nested Neovim ($NVIM) is skipped by auto, but a name asks for it anyway", function()
-    local nested = require("terminal.status.nested")
-    local saved = nested.nested
-    -- Test double: the outer Neovim is running and an ancestor (a positively known nesting).
-    ---@diagnostic disable-next-line: duplicate-set-field
-    nested.nested = function()
-      return true
+  it(
+    "choose: $NVIM is not looked into yet (no check at setup); a name asks for tmux anyway",
+    function()
+      local nested = require("terminal.status.nested")
+      local saved = nested.nested_async
+      local asked = 0
+      -- Test double: counts the nesting checks; the outer Neovim would be an ancestor.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      nested.nested_async = function(_, done)
+        asked = asked + 1
+        done(true)
+      end
+      local env = { TMUX = "/tmp/tmux-1/default,1,0", TMUX_PANE = "%1", NVIM = "/tmp/nvim.sock" }
+      local auto = publisher.choose("auto", env)
+      local named = publisher.choose("tmux", env)
+      nested.nested_async = saved
+      require("terminal.status.exporters.tmux").available({})
+      assert.equals(
+        0,
+        asked,
+        "choose started the nesting check (it runs before the first publication)"
+      )
+      assert.equals(1, #auto, "auto keeps tmux until the check says the outer Neovim owns the pane")
+      assert.equals(1, #named)
+      assert.equals("tmux", named[1].name)
     end
-    local env = { TMUX = "/tmp/tmux-1/default,1,0", TMUX_PANE = "%1", NVIM = "/tmp/nvim.sock" }
-    local auto = publisher.choose("auto", env)
-    local named = publisher.choose("tmux", env)
-    nested.nested = saved
-    assert.same({}, auto)
-    assert.equals(1, #named)
-    assert.equals("tmux", named[1].name)
-  end)
+  )
 end)
 
 describe("terminal.status with an asynchronous exporter", function()
@@ -739,3 +750,170 @@ describe("terminal.status with an asynchronous exporter", function()
     assert.same({}, publisher.active())
   end)
 end)
+
+describe(
+  "terminal.status in tmux with $NVIM set (the nesting check runs in the background)",
+  function()
+    local publisher, nested, exporter
+    local calls, waited
+    local saved = {}
+
+    before_each(function()
+      package.loaded["terminal.status"] = nil
+      publisher = require("terminal.status")
+      nested = require("terminal.status.nested")
+      exporter = require("terminal.status.exporters.tmux")
+      calls, waited = {}, 0
+      saved.system, saved.uis = vim.system, vim.api.nvim_list_uis
+      saved.alive, saved.parent_of_async = nested.alive, nested.parent_of_async
+      saved.notify_warn = require("terminal.notify").warn
+      -- Test double: no process is started. A blocking caller fails loudly (wait() raises); the
+      -- spec answers a started process by calling its on_exit by hand.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.system = function(argv, opts, on_exit)
+        local call = { argv = argv, opts = opts, on_exit = on_exit }
+        calls[#calls + 1] = call
+        return {
+          pid = 4242,
+          wait = function()
+            waited = waited + 1
+            error("wait() blocks the editor")
+          end,
+          kill = function() end,
+          is_closing = function()
+            return false
+          end,
+        }
+      end
+      -- Test double: pretends that one UI is attached.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.api.nvim_list_uis = function()
+        return { {} }
+      end
+      -- Test double: the outer Neovim's address answers.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      nested.alive = function()
+        return true
+      end
+      -- Test double: the process tree this Neovim -> 500 -> 400 -> 1, answered on the main loop.
+      local me = vim.uv.os_getpid()
+      local parents = { [me] = 500, [500] = 400, [400] = 1 }
+      ---@diagnostic disable-next-line: duplicate-set-field
+      nested.parent_of_async = function(pid, done)
+        vim.schedule(function()
+          done(parents[pid])
+        end)
+      end
+      -- Test double: no notice reaches the messages.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      require("terminal.notify").warn = function() end
+      saved.run = exporter.run
+      -- Test double: the blocking tmux call of clear() at the end of a case succeeds without tmux.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      exporter.run = function()
+        return { code = 0, stdout = "", stderr = "" }
+      end
+    end)
+
+    after_each(function()
+      -- stop first: its clear must still meet the doubles, never a real tmux
+      pcall(publisher.stop)
+      exporter.available({})
+      vim.system, vim.api.nvim_list_uis = saved.system, saved.uis
+      nested.alive, nested.parent_of_async = saved.alive, saved.parent_of_async
+      require("terminal.notify").warn = saved.notify_warn
+      exporter.run = saved.run
+    end)
+
+    ---The processes started so far whose argv contains `word`.
+    ---@param word string
+    ---@return table[]
+    local function started(word)
+      return vim.tbl_filter(function(call)
+        return vim.tbl_contains(call.argv, word)
+      end, calls)
+    end
+
+    ---Start the export as setup() does, then the first publication.
+    local function start()
+      publisher.setup(
+        { status = { enable = true, export = "auto", debounce_ms = 5, max_bytes = 1024 } },
+        { TMUX = "/tmp/tmux-1/default,1,0", TMUX_PANE = "%1", NVIM = "/tmp/outer.sock" }
+      )
+      assert.equals(
+        0,
+        #calls,
+        "setup started a process (the nesting check belongs to the first publication)"
+      )
+      publisher.publish_now()
+    end
+
+    ---Answer the `nvim --server` client by hand, as its process would.
+    ---@param pid string What the outer server says its pid is
+    local function answer(pid)
+      local asks = started("--remote-expr")
+      assert.equals(1, #asks, "one nvim --server client asks the outer Neovim")
+      asks[1].on_exit({ code = 0, signal = 0, stdout = pid .. "\n", stderr = "" })
+    end
+
+    it(
+      "does not wait for nvim --server at start; an outer Neovim that is an ancestor keeps it out",
+      function()
+        start()
+        assert.equals(0, waited, "the start waited for a process")
+        assert.same({}, started("set-option"), "the status went out before the check answered")
+        answer("400")
+        assert.is_true(
+          vim.wait(1000, function()
+            return #publisher.active() == 0
+          end, 5),
+          "the nested Neovim kept the pane's exporter"
+        )
+        publisher.publish_now()
+        assert.same({}, started("set-option"), "a nested Neovim wrote the outer one's pane")
+        assert.equals(0, waited)
+      end
+    )
+
+    it("publishes as soon as the check finds the outer Neovim is no ancestor", function()
+      start()
+      assert.same({}, started("set-option"))
+      answer("777")
+      assert.is_true(
+        vim.wait(1000, function()
+          return #started("set-option") > 0
+        end, 5),
+        "the held-back status never went out"
+      )
+      assert.same({ "tmux" }, publisher.active())
+      assert.equals(0, waited, "something waited for a process")
+    end)
+
+    it("a server that does not answer in time: unknown, the status goes out anyway", function()
+      start()
+      local asks = started("--remote-expr")
+      assert.equals(1500, asks[1].opts.timeout, "the client has no time limit")
+      -- vim.system ends a process that ran into its timeout with code 124
+      asks[1].on_exit({ code = 124, signal = 15, stdout = "", stderr = "" })
+      assert.is_true(
+        vim.wait(1000, function()
+          return #started("set-option") > 0
+        end, 5),
+        "an unknown nesting left the pane without a status"
+      )
+    end)
+
+    it("a second setup while the check runs ignores the late answer of the first", function()
+      start()
+      local first = started("--remote-expr")[1]
+      -- setup again (e.g. :Terminal setup) without $NVIM: no check, the pane is this Neovim's
+      publisher.setup(
+        { status = { enable = true, export = "auto", debounce_ms = 5, max_bytes = 1024 } },
+        { TMUX = "/tmp/tmux-1/default,1,0", TMUX_PANE = "%1" }
+      )
+      first.on_exit({ code = 0, signal = 0, stdout = "400\n", stderr = "" })
+      vim.wait(50)
+      assert.same({ "tmux" }, publisher.active(), "a stale verdict dropped the exporter")
+    end)
+  end
+)

@@ -261,6 +261,26 @@ function M.setup(cfg, env)
   end
 end
 
+--- Publish soon (debounced), also what an exporter held back: called by an exporter whose `ready()`
+--- was false for a while (a check in the background) once it can publish.
+---@return nil
+function M.request()
+  if runtime.debounce and #runtime.exporters > 0 then
+    runtime.debounce.call()
+  end
+end
+
+--- Take the exporter `name` out of use without clearing it: it found out (after `choose`) that it
+--- must not publish here, before it wrote anything.
+---@param name string
+---@return nil
+function M.drop(name)
+  runtime.exporters = vim.tbl_filter(function(e)
+    return e.name ~= name
+  end, runtime.exporters)
+  runtime.last[name] = nil
+end
+
 --- The exporters in use, for health checks.
 ---@return string[]
 function M.active()

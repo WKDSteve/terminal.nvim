@@ -15,10 +15,11 @@
 --- (`core.tmux_word`): tmux would otherwise read it as the end of the command.
 ---
 --- Whose pane it is: the options belong to `$TMUX_PANE`, so only the Neovim that *owns* the pane
---- may write them. `available()` refuses a Neovim known to run inside another Neovim's terminal (`$NVIM`;
---- when that cannot be found out it exports and warns once), `ready()`
---- refuses one without an attached UI (a headless child), and `clear()` removes the options only
---- when this instance wrote them.
+--- may write them. `ready()` refuses one without an attached UI (a headless child) and, with `$NVIM`
+--- set, holds the status back until a check in the background answers whether this Neovim runs
+--- inside the outer one's terminal: then it drops out (`terminal.status.drop`); when that cannot be
+--- found out it exports and warns once. `clear()` removes the options only when this instance
+--- wrote them.
 ---@see terminal.backends.tmux
 ---@see terminal.core.status
 
@@ -55,10 +56,24 @@ local function failure(res)
   return why
 end
 
+--- Whether this Neovim owns the pane although `$NVIM` is set, found out asynchronously: asking the
+--- outer server for its pid starts a `nvim --server` client (100-200 ms on Windows, up to 1.5 s for
+--- a busy server), and the editor must not wait for it at start. nil when `$NVIM` is not set.
+---@class Terminal.TmuxOwnerCheck
+---@field address string The value of `$NVIM`
+---@field state "pending"|"checking"|"known"
+---@field owner? boolean Once known: true = publish, false = the outer Neovim owns the pane
+
+---@type Terminal.TmuxOwnerCheck|nil
+local check = nil
+
+--- Whether this Neovim may still write the pane once its UI is up. `$NVIM` is not looked into here
+--- (no process is started at setup); `ready()` finds out before the first publication.
 ---@param env table<string, string|nil>
 ---@return boolean ok
 ---@return string|nil reason
 function M.available(env)
+  check = nil
   if not Env.inside(env, "tmux") then
     return false, "not running inside tmux ($TMUX is not set)"
   end
@@ -66,25 +81,68 @@ function M.available(env)
     return false, "$TMUX_PANE is not set"
   end
   if Env.set(env.NVIM) then
-    local nested = require("terminal.status.nested").nested(env.NVIM)
-    if nested then
-      return false,
-        "this Neovim runs inside another Neovim's terminal ($NVIM is set); the outer one owns the pane"
-    elseif nested == nil then
-      -- Unknown ancestry is not a reason to leave the pane without a status: publish, and say so once.
-      M.warn_unknown_once()
-    end
+    check = { address = env.NVIM, state = "pending" }
   end
   return true, nil
 end
 
+--- The answer of the nesting check for `this` (ignored when `available` started another since).
+---@internal
+---@param this Terminal.TmuxOwnerCheck
+---@param nested boolean|nil
+local function settle(this, nested)
+  if check ~= this then
+    return
+  end
+  this.state = "known"
+  this.owner = not nested
+  local status = require("terminal.status")
+  if nested then
+    -- The outer Neovim owns the pane: this one never writes it, as if `available` had refused.
+    status.drop(M.name)
+    return
+  end
+  if nested == nil then
+    -- Unknown ancestry is not a reason to leave the pane without a status: publish, and say so once.
+    M.warn_unknown_once()
+  end
+  -- What was held back while the check ran goes out now.
+  status.request()
+end
+
+--- Whether the nesting check lets this Neovim publish; starts it the first time it is asked.
+---@internal
+---@return boolean
+local function owns_pane()
+  if check == nil then
+    return true
+  end
+  if check.state == "known" then
+    return check.owner == true
+  end
+  if check.state == "pending" then
+    local this = check
+    this.state = "checking"
+    require("terminal.status.nested").nested_async(this.address, function(nested)
+      settle(this, nested)
+    end)
+  end
+  return false
+end
+
 local warned_unknown = false
+
+---@internal
+---@return boolean
+local function has_ui()
+  return #vim.api.nvim_list_uis() > 0
+end
 
 --- One warning per session (in `auto` too) that $NVIM is set but the nesting could not be found out.
 ---@return nil
 function M.warn_unknown_once()
   -- Not for a Neovim without a UI (a script child, `--headless`): it never exports, there is nothing to warn of.
-  if warned_unknown or not M.ready() then
+  if warned_unknown or not has_ui() then
     return
   end
   warned_unknown = true
@@ -103,10 +161,11 @@ function M.reset_unknown_warning()
 end
 
 --- Only a Neovim with an attached UI shows anything to the pane's user; a headless one (a
---- script, `--headless "+Lazy! sync"`) leaves the pane's options alone.
+--- script, `--headless "+Lazy! sync"`) leaves the pane's options alone. With `$NVIM` set, not
+--- before the nesting check answered (it is started here, the first time a UI is there).
 ---@return boolean
 function M.ready()
-  return #vim.api.nvim_list_uis() > 0
+  return has_ui() and owns_pane()
 end
 
 ---@internal

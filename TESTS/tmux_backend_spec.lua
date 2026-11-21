@@ -507,20 +507,33 @@ describe("terminal.status.exporters.tmux", function()
     end
   )
 
-  it("available refuses a Neovim inside another LIVE Neovim's terminal ($NVIM)", function()
-    local saved = nested.nested
-    -- Test double: the outer Neovim is running and an ancestor (a positively known nesting).
+  it("available starts no nesting check with $NVIM set (no process at setup)", function()
+    local saved, saved_async = nested.nested, nested.nested_async
+    local asked = 0
+    -- Test doubles: the outer Neovim would be running and an ancestor; each check is counted.
     ---@diagnostic disable-next-line: duplicate-set-field
     nested.nested = function()
+      asked = asked + 1
       return true
     end
+    ---@diagnostic disable-next-line: duplicate-set-field
+    nested.nested_async = function(_, done)
+      asked = asked + 1
+      done(true)
+    end
     local env = { TMUX = "/tmp/tmux-1/default,1,0", TMUX_PANE = "%1" }
-    assert.is_true((exporter.available(env)))
-    local inside_neovim = vim.tbl_extend("force", env, { NVIM = "/tmp/nvim.sock" })
-    local ok, why = exporter.available(inside_neovim)
-    nested.nested = saved
-    assert.is_false(ok)
-    assert.truthy(why:find("NVIM", 1, true))
+    local plain = exporter.available(env)
+    local inside_neovim =
+      exporter.available(vim.tbl_extend("force", env, { NVIM = "/tmp/nvim.sock" }))
+    nested.nested, nested.nested_async = saved, saved_async
+    exporter.available({})
+    assert.is_true(plain)
+    assert.is_true(inside_neovim, "refused before anything was found out")
+    assert.equals(
+      0,
+      asked,
+      "available asked about the nesting (it belongs to the first publication)"
+    )
   end)
 
   it(
@@ -591,28 +604,62 @@ describe("terminal.status.exporters.tmux", function()
     end
   )
 
-  --- The process lookups of the tmux exporter that `with_stubs` can replace.
+  --- The process lookups of the tmux exporter that `with_stubs` can replace. Each blocking stub
+  --- also answers the asynchronous form (on the main loop), unless that one is given itself.
   ---@class Terminal.Spec.ExporterStubs
   ---@field alive? fun(address: string): boolean Replaces `nested.alive`
-  ---@field server_pid? fun(address: string): integer|nil Replaces `nested.server_pid`
-  ---@field parent_of? fun(pid: integer): integer|nil Replaces `nested.parent_of`
+  ---@field server_pid? fun(address: string): integer|nil Replaces `nested.server_pid` (and `_async`)
+  ---@field parent_of? fun(pid: integer): integer|nil Replaces `nested.parent_of` (and `_async`)
+
+  ---@internal
+  ---@param fn fun(arg: any): any
+  ---@return fun(arg: any, done: fun(value: any))
+  local function later(fn)
+    return function(arg, done)
+      vim.schedule(function()
+        done(fn(arg))
+      end)
+    end
+  end
 
   --- Run `body` with the process lookups of `terminal.status.nested` replaced; always restore them.
   ---@param stubs Terminal.Spec.ExporterStubs
   ---@param body fun()
   local function with_stubs(stubs, body)
-    local saved = {
-      alive = nested.alive,
-      server_pid = nested.server_pid,
-      parent_of = nested.parent_of,
-    }
+    local names = { "alive", "server_pid", "parent_of", "server_pid_async", "parent_of_async" }
+    local saved = {}
+    for _, name in ipairs(names) do
+      saved[name] = nested[name]
+    end
     for name, fn in pairs(stubs) do
       nested[name] = fn
+      if nested[name .. "_async"] and not stubs[name .. "_async"] then
+        nested[name .. "_async"] = later(fn)
+      end
     end
     local ok, err = pcall(body)
-    nested.alive, nested.server_pid, nested.parent_of =
-      saved.alive, saved.server_pid, saved.parent_of
+    for _, name in ipairs(names) do
+      nested[name] = saved[name]
+    end
     assert(ok, err)
+  end
+
+  ---Both forms of the nesting check must agree: the blocking `nested` and `nested_async`.
+  ---@param address string
+  ---@return boolean|nil blocking
+  ---@return boolean|nil async
+  local function both(address)
+    local answered, async = false, nil
+    nested.nested_async(address, function(n)
+      answered, async = true, n
+    end)
+    assert.is_true(
+      vim.wait(1000, function()
+        return answered
+      end, 5),
+      "nested_async never answered: " .. address
+    )
+    return nested.nested(address), async
   end
 
   it("nested: a running outer Neovim counts only when it is an ancestor of this process", function()
@@ -631,15 +678,19 @@ describe("terminal.status.exporters.tmux", function()
         return pids[address]
       end,
     }, function()
-      assert.is_true(nested.nested("outer"), "an ancestor: this Neovim is nested")
-      assert.is_false(
-        nested.nested("elsewhere"),
-        "running but not an ancestor (a tmux server that was started from its terminal): owns its pane"
-      )
-      assert.is_nil(
-        nested.nested("silent"),
-        "the server does not tell its pid in time: unknown, not nested"
-      )
+      for _, case in ipairs({
+        { "outer", true, "an ancestor: this Neovim is nested" },
+        {
+          "elsewhere",
+          false,
+          "running but not an ancestor (a tmux server that was started from its terminal): owns its pane",
+        },
+        { "silent", nil, "the server does not tell its pid in time: unknown, not nested" },
+      }) do
+        local blocking, async = both(case[1])
+        assert.equals(case[2], blocking, case[3])
+        assert.equals(case[2], async, case[3] .. " (async)")
+      end
     end)
   end)
 
@@ -667,7 +718,9 @@ describe("terminal.status.exporters.tmux", function()
           "\\\\.\\pipe\\nvim.999.0",
           "/tmp/plain-socket",
         }) do
-          assert.is_true(nested.nested(address), address)
+          local blocking, async = both(address)
+          assert.is_true(blocking, address)
+          assert.is_true(async, address .. " (async)")
         end
       end)
     end
@@ -685,21 +738,72 @@ describe("terminal.status.exporters.tmux", function()
         return nil
       end,
     }, function()
-      assert.is_nil(nested.nested("outer"), "chain unreadable: unknown, not nested")
+      local blocking, async = both("outer")
+      assert.is_nil(blocking, "chain unreadable: unknown, not nested")
+      assert.is_nil(async, "chain unreadable: unknown, not nested (async)")
       -- Test double: the outer Neovim is gone.
       ---@diagnostic disable-next-line: duplicate-set-field
       nested.alive = function()
         return false
       end
-      assert.is_false(nested.nested("outer"), "outer Neovim gone")
+      blocking, async = both("outer")
+      assert.is_false(blocking, "outer Neovim gone")
+      assert.is_false(async, "outer Neovim gone (async)")
     end)
   end)
 
-  ---Run `available` twice with an unknown ancestry; what was warned (the warning is scheduled: it is waited for).
+  it("nested: a broken parent table (a loop) ends after 64 levels, in both forms", function()
+    local steps = 0
+    with_stubs({
+      alive = function()
+        return true
+      end,
+      server_pid = function()
+        return 400
+      end,
+      parent_of = function()
+        steps = steps + 1
+        return 77 -- its own parent, for ever
+      end,
+    }, function()
+      local blocking, async = both("outer")
+      assert.is_false(blocking)
+      assert.is_false(async)
+      assert.equals(128, steps, "each form follows the loop 64 levels")
+    end)
+  end)
+
+  ---What the exporter hands to terminal.status once its nesting check answered.
+  ---@class Terminal.Spec.Verdicts
+  ---@field drop integer How often it dropped out (the outer Neovim owns the pane)
+  ---@field request integer How often it asked to publish what it held back
+
+  ---Run `body` with `terminal.status.drop/request` counted instead of run.
+  ---@param body fun(verdicts: Terminal.Spec.Verdicts)
+  local function with_verdicts(body)
+    local status = require("terminal.status")
+    local saved_drop, saved_request = status.drop, status.request
+    local verdicts = { drop = 0, request = 0 }
+    ---@diagnostic disable-next-line: duplicate-set-field
+    status.drop = function()
+      verdicts.drop = verdicts.drop + 1
+    end
+    ---@diagnostic disable-next-line: duplicate-set-field
+    status.request = function()
+      verdicts.request = verdicts.request + 1
+    end
+    local ok, err = pcall(body, verdicts)
+    status.drop, status.request = saved_drop, saved_request
+    exporter.available({})
+    assert(ok, err)
+  end
+
+  ---Run `available` + `ready` twice with an unknown ancestry; what was warned (the warning is scheduled: it is waited for).
   ---@param with_ui boolean Whether a UI is attached
   ---@return boolean first
   ---@return boolean second
   ---@return string[] warned
+  ---@return Terminal.Spec.Verdicts verdicts
   local function unknown_ancestry(with_ui)
     local notify = require("terminal.notify")
     local warned = {}
@@ -714,47 +818,62 @@ describe("terminal.status.exporters.tmux", function()
     end
     exporter.reset_unknown_warning()
     local result = {}
-    with_stubs({
-      alive = function()
-        return true
-      end,
-      server_pid = function()
-        return nil -- the outer Neovim does not answer
-      end,
-    }, function()
-      local env = { TMUX = "/tmp/tmux-1/default,1,0", TMUX_PANE = "%1", NVIM = "/tmp/outer.sock" }
-      result.first = exporter.available(env)
-      result.second = exporter.available(env)
+    with_verdicts(function(verdicts)
+      result.verdicts = verdicts
+      with_stubs({
+        alive = function()
+          return true
+        end,
+        server_pid = function()
+          return nil -- the outer Neovim does not answer
+        end,
+      }, function()
+        local env = { TMUX = "/tmp/tmux-1/default,1,0", TMUX_PANE = "%1", NVIM = "/tmp/outer.sock" }
+        for _, key in ipairs({ "first", "second" }) do
+          result[key] = exporter.available(env)
+          exporter.ready()
+          vim.wait(with_ui and 1000 or 100, function()
+            return verdicts.request + verdicts.drop >= (key == "first" and 1 or 2)
+          end, 5)
+        end
+      end)
     end)
-    vim.wait(with_ui and 1000 or 100, function()
-      return #warned >= 1
-    end)
-    vim.wait(50) -- a second one would arrive in this time
+    vim.wait(50) -- a second warning would arrive in this time
     notify.warn, vim.api.nvim_list_uis = saved_warn, saved_uis
     exporter.reset_unknown_warning()
-    return result.first, result.second, warned
+    return result.first, result.second, warned, result.verdicts
   end
 
   it("nested: an unknown ancestry exports anyway and warns once, in every mode", function()
-    local first, second, warned = unknown_ancestry(true)
+    local first, second, warned, verdicts = unknown_ancestry(true)
     assert.is_true(first, "unknown ancestry: the pane gets its status")
     assert.is_true(second)
+    assert.same({ drop = 0, request = 2 }, verdicts, "each check asks to publish")
     assert.equals(1, #warned, "told once, not on every call")
     assert.truthy(warned[1]:find("could not tell whether $NVIM owns", 1, true))
   end)
 
-  it("nested: a Neovim without a UI does not warn (it never exports)", function()
-    local first, _, warned = unknown_ancestry(false)
-    assert.is_true(first)
-    assert.same({}, warned)
-  end)
+  it(
+    "nested: a Neovim without a UI does not warn and starts no check (it never exports)",
+    function()
+      local first, _, warned, verdicts = unknown_ancestry(false)
+      assert.is_true(first)
+      assert.same({}, warned)
+      assert.same({ drop = 0, request = 0 }, verdicts)
+    end
+  )
 
   it(
-    "nested: available refuses an ancestor and accepts a Neovim that merely shares $NVIM",
+    "nested: an ancestor drops out once the check answers; a Neovim that merely shares $NVIM publishes",
     function()
       local me = vim.uv.os_getpid()
+      local saved_uis = vim.api.nvim_list_uis
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.api.nvim_list_uis = function()
+        return { {} }
+      end
       local result = {}
-      with_stubs({
+      local ok, err = pcall(with_stubs, {
         alive = function()
           return true
         end,
@@ -766,11 +885,32 @@ describe("terminal.status.exporters.tmux", function()
         end,
       }, function()
         local env = { TMUX = "/tmp/tmux-1/default,1,0", TMUX_PANE = "%1" }
-        result.nested = exporter.available(vim.tbl_extend("force", env, { NVIM = "ancestor" }))
-        result.owner = exporter.available(vim.tbl_extend("force", env, { NVIM = "stranger" }))
+        for _, address in ipairs({ "ancestor", "stranger" }) do
+          with_verdicts(function(verdicts)
+            local available = exporter.available(vim.tbl_extend("force", env, { NVIM = address }))
+            local held = not exporter.ready()
+            vim.wait(1000, function()
+              return verdicts.drop + verdicts.request > 0
+            end, 5)
+            result[address] = {
+              available = available,
+              held = held,
+              ready = exporter.ready(),
+              verdicts = vim.deepcopy(verdicts),
+            }
+          end)
+        end
       end)
-      assert.is_false(result.nested)
-      assert.is_true(result.owner)
+      vim.api.nvim_list_uis = saved_uis
+      assert(ok, err)
+      assert.same(
+        { available = true, held = true, ready = false, verdicts = { drop = 1, request = 0 } },
+        result.ancestor
+      )
+      assert.same(
+        { available = true, held = true, ready = true, verdicts = { drop = 0, request = 1 } },
+        result.stranger
+      )
     end
   )
 
