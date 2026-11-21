@@ -54,4 +54,35 @@ return {
       },
     },
   },
+  -- The pipeline is derived (stylua, luacheck, suite, conformance); the steps below join the default profile.
+  -- Not in it yet (tasks-vault terminal.nvim/tmux-live-und-luals-in-die-generierte-ci): the tmux live smoke
+  -- (TESTS/live/*.lua, needs tmux on the Linux leg only) and scripts/luals-check.sh (needs lua-language-server).
+  ci = {
+    -- The GitHub workflow, generated: `testing init --workflow=public --force` writes .github/workflows/ci.yml from
+    -- this (testing.nvim docs/WORKFLOW-CI.md); the step workflow-in-sync keeps the two together.
+    workflow = {
+      name = "terminal.nvim",
+      layout = "hosted",
+      -- the steps that depend on the platform: the windows and macOS legs run only these
+      platform = { "suite", "conformance" },
+      -- `testing ci land`: a check branch ci/** runs the hosted legs, main moves to a commit only once it is green there
+      land = true,
+      -- more checkouts below .deps/, not on the runtimepath of the specs
+      checkouts = {
+        {
+          repo = "WKDSteve/sessions.nvim",
+          -- sessions.nvim publishes no ci-verified branch: main with green CI on 2026-11-18
+          ref = "75bae32ff77ae791c1afb431e92f844e707c0c17",
+          why = "TESTS/sessions_spec.lua and the session test sheets drive the real sessions.nvim",
+        },
+      },
+      min_nvim = {
+        version = "0.11.0",
+        why = "the README promises Neovim 0.11+ (the old workflow had a v0.11.0 leg)",
+      },
+    },
+    steps = {
+      ["workflow-in-sync"] = { preset = "workflow-in-sync" },
+    },
+  },
 }

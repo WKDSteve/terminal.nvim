@@ -1,215 +1,167 @@
-# Independent jobs so each keeps its own red/green mark. What each gate
-# actually checks lives in stylua.toml / .luacheckrc / scripts/test.sh -- this
-# workflow only wires those up, it does not re-specify them. Run the same
-# locally with `stylua --check .`, `luacheck .`, `scripts/test.sh` and
-# `scripts/luals-check.sh`.
+# CI of terminal.nvim: one pipeline, GitHub-hosted runners only.
+#
+# What is checked lives only in the `ci` section of .testing.lua; every leg runs it with `scripts/test.sh ci`, exactly
+# as the pre-push hook and `:Testing ci` do. This file only prepares the machine.
+#
+# - every event (a push to main, a pull request, also from a fork): GitHub-hosted runners only, a throwaway VM with a
+#   read-only token and no secrets; nothing runs on the maintainer's machine. The whole profile runs on ubuntu, the
+#   steps that depend on the platform (the suite and conformance) on windows and macOS. The legs pin nvim 0.12.2, stylua
+#   2.5.2, luacheck 1.2.0.
+# - the result cache (docs/CI-CACHE.md of testing.nvim): the suite reuses the green results of earlier runs; a pull
+#   request only restores it, only a push to main saves it.
+#
+# A fork can edit this file in its pull request (e.g. `runs-on: self-hosted`). The repository therefore requires
+# approval before a workflow of an outside contributor runs; never approve a pull request that touches `.github/`.
 
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "ci/**"]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  stylua:
+  # testing ci land pushes a commit to a check branch ci/** first and moves main to it only when that run was green:
+  # the push to main is then the same commit again. This job (seconds, no checkout) finds such a green run of this
+  # workflow for this commit on a ci/** branch; then the legs are skipped (publish-ci-verified, if any, runs). Any other
+  # answer (none, an API error) runs the legs as usual.
+  already-verified:
+    name: already verified on ci/**
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      verified: ${{ steps.look.outputs.verified }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: JohnnyMorganz/stylua-action@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: v2.5.2
-          args: --check .
+      - id: look
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          WORKFLOW: ${{ github.workflow }}
+        run: |
+          n=$(gh api "repos/$REPO/actions/runs?head_sha=$SHA&event=push&status=success&per_page=50" \
+            --jq "[.workflow_runs[] | select(.name == env.WORKFLOW and (.head_branch | startswith(\"ci/\")))] | length" \
+            || echo 0)
+          if [ "${n:-0}" -gt 0 ]; then
+            echo "green on a ci/** branch already: the legs are skipped"
+            echo "verified=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+          fi
 
-  luacheck:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v5
-      # PUC Lua 5.4, not LuaJIT: `std = "luajit"` in .luacheckrc pins which
-      # globals/stdlib luacheck checks *against* -- independent of which
-      # interpreter runs the luacheck binary itself.
-      - uses: leafo/gh-actions-lua@v13
-        with:
-          luaVersion: "5.4"
-      - uses: leafo/gh-actions-luarocks@v6
-      - run: luarocks install luacheck 1.2.0
-      - run: luacheck .
-
-  tests:
-    # Both OSes the plugin is actually used on: Windows isn't just "also
-    # supported" here, it's the primary author's own daily driver -- a
-    # bash-isms regression (path separators, scripts/test.sh's own shell
-    # syntax) would otherwise only ever surface after the fact, on someone's
-    # real machine, never in CI.
+  pipeline:
+    name: testing ci (${{ matrix.name }})
+    needs: [already-verified]
+    # Not on main when the same commit was green on a check branch ci/** (testing ci land): it ran there already.
+    if: ${{ !cancelled() && needs.already-verified.outputs.verified != 'true' }}
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 30
     strategy:
-      # One platform failing must not cancel the others: which of the three
-      # broke is the whole information content of this job.
+      # One platform failing must not cancel the other.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        neovim: [stable]
-        include:
-          # The documented minimum (docs/requirements.md): everything but the WezTerm status
-          # export (0.12+) has to work there, and only a run on it can say so.
-          - os: ubuntu-latest
-            neovim: v0.11.0
-    name: tests (${{ matrix.os }}, nvim ${{ matrix.neovim }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+        # Every event gets hosted runners: the whole profile on ubuntu, and on windows and macOS the steps that depend
+        # on the platform (stylua and luacheck do not).
+        # ubuntu-min: the suite on the promised minimum, nvim: v0.11.0 (the README promises Neovim 0.11+ (the old
+        # workflow had a v0.11.0 leg)). It runs only the suite: the tools come from the full leg.
+        include: ${{ fromJSON('[{"name":"ubuntu","runs-on":"ubuntu-latest","hosted":true,"steps":""},{"name":"windows","runs-on":"windows-latest","hosted":true,"steps":"--step=suite,conformance"},{"name":"macos","runs-on":"macos-latest","hosted":true,"steps":"--step=suite,conformance"},{"name":"ubuntu-min","runs-on":"ubuntu-latest","hosted":true,"steps":"--step=suite","nvim":"0.11.0"}]') }}
+    defaults:
+      run:
+        # One shell on every runner: `bash` is the WSL launcher on the self-hosted machine, pwsh is everywhere.
+        shell: pwsh
     steps:
-      - uses: actions/checkout@v5
-      # lib.nvim is a runtime dependency (notify, bindings.keymap, bindings.autocmd,
-      # usercmd.composer, config) -- a headless run has no plugin manager, so it is
-      # checked out the way TESTS/minimal_init.lua's `.deps/` candidate expects.
-      # testing.nvim is the runner.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
+          persist-credentials: false
+      # Found by scripts/test.sh in `.deps/<name>`. lib.nvim and testing.nvim come from the branch that only moves
+      # once the dependency's own CI is green.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
           repository: WKDSteve/lib.nvim
           path: .deps/lib.nvim
           ref: ci-verified
-      - uses: rhysd/action-setup-vim@v1
+      # TESTS/sessions_spec.lua and the session test sheets drive the real sessions.nvim
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          neovim: true
-          version: ${{ matrix.neovim }}
-      # Checked out from the branch that only moves once the dependency's own CI is green.
-      - uses: actions/checkout@v5
-        with:
-          repository: "WKDSteve/testing.nvim"
-          path: .deps/testing.nvim
-          ref: ci-verified
-      # sessions.nvim only for the test sheet of a session (TESTS/minimal_init.lua: SHEETS_ONLY); main
-      # moves only on a green run there (testing ci land).
-      - uses: actions/checkout@v5
-        with:
-          repository: "WKDSteve/sessions.nvim"
+          persist-credentials: false
+          repository: WKDSteve/sessions.nvim
           path: .deps/sessions.nvim
-      # windows-latest's default shell is pwsh, not bash -- scripts/test.sh
-      # is a bash script (Git for Windows ships one on every windows-latest
-      # runner, actions/checkout already needs it).
-      - run: |
-          exec > >(tee -a "$RUNNER_TEMP/test-output.log") 2>&1
-          scripts/test.sh --json "$RUNNER_TEMP/testing-ir.json"
-        shell: bash
-      - name: Conformance gate
-        shell: bash
-        run: bash scripts/test.sh conformance
-      # The IR is what a reporter or a person reads to find out WHICH case failed on WHICH platform.
-      - uses: actions/upload-artifact@v7
-        if: failure()
+          # Pinned: a commit whose own CI was green (no ci-verified branch to follow). Bump on purpose.
+          ref: 75bae32ff77ae791c1afb431e92f844e707c0c17
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          name: testing-ir-${{ matrix.os }}-${{ matrix.neovim }}
-          path: ${{ runner.temp }}/testing-ir.json
-          if-no-files-found: ignore
-          retention-days: 14
-      - uses: actions/upload-artifact@v7
-        if: failure()
-        with:
-          name: test-output-tests-${{ matrix.os }}-${{ matrix.neovim }}
-          path: ${{ runner.temp }}/test-output.log
-          if-no-files-found: ignore
-          retention-days: 14
-
-  # The tmux backend and status exporter against a REAL tmux server (a private socket). The suite
-  # itself uses a fake tmux; this job is where the real one is exercised.
-  tmux-live:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/checkout@v5
-        with:
-          repository: WKDSteve/lib.nvim
-          path: .deps/lib.nvim
-          ref: ci-verified
-      - uses: rhysd/action-setup-vim@v1
-        with:
-          neovim: true
-          version: stable
-      - run: sudo apt-get update && sudo apt-get install -y tmux
-      - run: |
-          export LIB_NVIM_DIR="$PWD/.deps/lib.nvim"
-          export SMOKE_OUT="$RUNNER_TEMP/tmux-live.txt"
-          nvim --headless -u NONE -l TESTS/live/tmux.lua || true
-          cat "$SMOKE_OUT"
-          grep -q "^RESULT ok$" "$SMOKE_OUT"
-      # Ownership of a tmux pane against a real process tree: a Neovim nested in another one's
-      # terminal stays out, one in a pane of a tmux server started from that terminal does not.
-      - run: |
-          export LIB_NVIM_DIR="$PWD/.deps/lib.nvim"
-          export SMOKE_OUT="$RUNNER_TEMP/tmux-nested.txt"
-          nvim --headless -u NONE -l TESTS/live/nested.lua || true
-          cat "$SMOKE_OUT"
-          grep -q "^RESULT ok$" "$SMOKE_OUT"
-      # The same with an app name: the default servername is <appname>.<pid>.<n>.
-      - run: |
-          export LIB_NVIM_DIR="$PWD/.deps/lib.nvim"
-          export SMOKE_OUT="$RUNNER_TEMP/tmux-nested-appname.txt"
-          NVIM_APPNAME=my-app.v2 nvim --headless -u NONE -l TESTS/live/nested.lua || true
-          cat "$SMOKE_OUT"
-          grep -q "^RESULT ok$" "$SMOKE_OUT"
-
-  # LuaLS diagnostics over lua/ and TESTS/, held at zero (docs/development.md, "Types"). Without this job
-  # the check only ran by hand and drifted to 16 findings unnoticed. One system is enough: the findings
-  # are about the source, not the platform. The version is pinned so a LuaLS release cannot turn the job
-  # red on its own; scripts/luals-check.sh fails loudly when the binary is missing instead of passing.
-  luals:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      LUALS_VERSION: "3.18.2"
-      # of lua-language-server-<version>-linux-x64.tar.gz (the digest GitHub lists for the release asset);
-      # a bump of the version needs the new one
-      LUALS_SHA256: "ca71415dd19f19e30aaa35a4915aefca9fdb5fec31b98331cc3d77f778d539c5"
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/checkout@v5
-        with:
-          repository: WKDSteve/lib.nvim
-          path: .deps/lib.nvim
-          ref: ci-verified
-      - uses: actions/checkout@v5
-        with:
+          persist-credentials: false
           repository: WKDSteve/testing.nvim
           path: .deps/testing.nvim
           ref: ci-verified
-      - uses: rhysd/action-setup-vim@v1
+      # The tools every leg needs, at the versions of the table in testing.nvim (testing.ci.workflow).
+      - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1
+        if: matrix.hosted
         with:
           neovim: true
-          version: stable
-      - name: lua-language-server
+          version: v${{ matrix.nvim || '0.12.2' }}
+      # The action installs stylua on PATH; `--version` only proves it is there, the check itself is the pipeline's.
+      - uses: JohnnyMorganz/stylua-action@76fd70c03e6340ceaf673366712db9b20560b402 # v5
+        if: matrix.hosted && matrix.steps == ''
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: v2.5.2
+          args: --version
+      # luacheck as the release binary of lunarmodules, its sha256 pinned (checked against the maintainer's signature;
+      # the file scripts/wsl-tools.sh of testing.nvim installs): no Lua from www.lua.org, whose download timed out.
+      # `std = "luajit"` in .luacheckrc decides what is checked against.
+      - if: matrix.hosted && matrix.steps == ''
+        shell: bash
         run: |
-          dir="$RUNNER_TEMP/luals"
-          mkdir -p "$dir"
-          tarball="$RUNNER_TEMP/luals.tar.gz"
-          curl -fsSL -o "$tarball" "https://github.com/LuaLS/lua-language-server/releases/download/$LUALS_VERSION/lua-language-server-$LUALS_VERSION-linux-x64.tar.gz"
-          echo "$LUALS_SHA256  $tarball" | sha256sum -c -
-          tar -xzf "$tarball" -C "$dir"
-          echo "$dir/bin" >> "$GITHUB_PATH"
-      - run: bash scripts/luals-check.sh
-
-  # The layer rules of .docmap.json (core does not reach into backends / bindings / status, a backend
-  # does not know bindings). The gate is the generator's exit code. NOT `--check`: that compares with a
-  # committed map, and docs/map/ is deliberately not committed.
-  map:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/checkout@v5
+          curl -fsSL -o "$RUNNER_TEMP/luacheck" "https://github.com/lunarmodules/luacheck/releases/download/v1.2.0/luacheck"
+          echo "d68da17fca0697d9e2fb04201f3884abd259fa558b3a449bccaed47f1390defc  $RUNNER_TEMP/luacheck" | sha256sum -c -
+          install -D -m 755 "$RUNNER_TEMP/luacheck" "$HOME/.local/bin/luacheck"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The result cache (docs/CI-CACHE.md of testing.nvim). The key is only the transport: every entry carries its
+      # own full spec key and is checked against it when read, so a wrong restore can lower the hit rate and never turn
+      # a result green. A pull request only restores; only a push to main saves.
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          repository: WKDSteve/lib.nvim
-          path: .deps/lib.nvim
-          ref: ci-verified
-      - uses: actions/checkout@v5
+          path: ${{ runner.temp }}/testing-cache
+          key: testing-${{ runner.os }}-nvim${{ matrix.nvim || '0.12.2' }}-${{ github.sha }}
+          restore-keys: testing-${{ runner.os }}-nvim${{ matrix.nvim || '0.12.2' }}-
+      - name: scripts/test.sh ci ${{ matrix.steps }}
+        env:
+          TESTING_CACHE_HOME: ${{ runner.temp }}/testing-cache
+          CI_STEPS: ${{ matrix.steps }}
+          CI_REPORT: ${{ runner.temp }}/ci-report.json
+          CI_IR: ${{ runner.temp }}/suite-ir.json
+        run: |
+          nvim --version | Select-Object -First 1
+          # Git Bash on Windows (never the WSL launcher), bash elsewhere; scripts/test.sh is a bash script.
+          $bash = if ($IsWindows) { Join-Path $env:ProgramFiles 'Git\bin\bash.exe' } else { 'bash' }
+          $steps = @($env:CI_STEPS -split ' ' | Where-Object { $_ })
+          & $bash scripts/test.sh ci @steps --keep-going --no-agent "--json=$env:CI_REPORT" -- "--json=$env:CI_IR" --cached
+          exit $LASTEXITCODE
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
-          repository: WKDSteve/docmap.nvim
-          path: .deps/docmap.nvim
-          ref: ci-verified
-      - uses: rhysd/action-setup-vim@v1
+          path: ${{ runner.temp }}/testing-cache
+          key: testing-${{ runner.os }}-nvim${{ matrix.nvim || '0.12.2' }}-${{ github.sha }}
+      # The report names every step and, for a red one, its findings or last output lines; the suite IR (everything
+      # after `--` goes to the suite step) names the failing case and its assertions.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
         with:
-          neovim: true
-          version: stable
-      - run: nvim -n -i NONE --headless -l scripts/gen_map.lua
+          name: ci-${{ matrix.name }}
+          path: |
+            ${{ runner.temp }}/ci-report.json
+            ${{ runner.temp }}/suite-ir.json
+          if-no-files-found: ignore
+          retention-days: 14
