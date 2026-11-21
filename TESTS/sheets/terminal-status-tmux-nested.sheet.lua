@@ -9,7 +9,7 @@ return {
   id = "terminal.status-tmux-nested",
   feature = "terminal.status-export",
   title = "terminal.nvim: with $NVIM set, the nesting check runs in the background and the status follows",
-  task = "terminal.nvim/status-nested-synchroner-nvim-server-aufruf-beim-start-messe",
+  task = "terminal.nvim/handlauf-status-export-mit-nvim-in-echtem-tmux",
   fakes = { "tmux" },
   steps = {
     {
