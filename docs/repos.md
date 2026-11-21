@@ -10,6 +10,8 @@ terminal.nvim            local: 3 changed, ahead 1     CI: green
 
 Which repositories: the project roots of the terminals terminal.nvim knows (all projects, not
 just the current one). Two terminals in one project show one line.
+A repository cloned with reposcope.nvim joins the list too, without a terminal: terminal.nvim
+listens (softly) for `User ReposcopeCloned` (`data = { path, url }`) and redraws an open panel.
 
 ## Local state
 

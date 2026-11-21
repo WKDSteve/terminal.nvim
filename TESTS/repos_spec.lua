@@ -469,3 +469,47 @@ describe("terminal.repos.panel", function()
     assert.equals("testing ci trust o/streamtap d", vim.fn.getreg('"'))
   end)
 end)
+
+describe("terminal.repos adopt (User ReposcopeCloned)", function()
+  before_each(function()
+    repos.reset()
+    panel.close()
+  end)
+  after_each(function()
+    repos.reset()
+    panel.close()
+    pcall(vim.api.nvim_del_augroup_by_name, "terminal.repo_cloned")
+  end)
+
+  it("adopted roots follow the terminal roots, once", function()
+    assert.is_true(repos.adopt("/tmp/new-clone/"))
+    assert.is_false(repos.adopt("/tmp/new-clone"))
+    assert.is_false(repos.adopt(""))
+    local roots = repos.open_roots(function()
+      return { { root = "/a" }, { root = "/tmp/new-clone" } }
+    end)
+    assert.same({ "/a", "/tmp/new-clone" }, roots)
+    assert.same(
+      { "/a", "/tmp/new-clone" },
+      repos.open_roots(function()
+        return { { root = "/a" } }
+      end)
+    )
+  end)
+
+  it("the event adopts the path; a failed payload is ignored", function()
+    require("terminal.bindings.autocmds").setup(require("terminal.config").get and require("terminal.config").get() or {
+      window_options = { enable = false },
+      auto_insert = { enable = false },
+      kitty = { enable = false },
+    })
+    vim.api.nvim_exec_autocmds("User", { pattern = "ReposcopeCloned", data = { path = "/tmp/ev", url = "u" } })
+    vim.api.nvim_exec_autocmds("User", { pattern = "ReposcopeCloned" })
+    assert.same(
+      { "/tmp/ev" },
+      repos.open_roots(function()
+        return {}
+      end)
+    )
+  end)
+end)

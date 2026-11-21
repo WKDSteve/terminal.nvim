@@ -42,6 +42,11 @@ M.MAX_FAILED_LOOKUPS = 5
 ---@type table<string, Terminal.RepoRow>
 local cache = {}
 
+--- Repositories taken in from outside (reposcope's `User ReposcopeCloned`): shown in the panel even
+--- though no terminal is open in them. Insertion order.
+---@type string[]
+local adopted = {}
+
 ---@return number
 local function now_ms()
   return vim.uv.hrtime() / 1e6
@@ -291,7 +296,34 @@ end
 ---@param list fun(all?: boolean): { root?: string }[] `terminal.list`
 ---@return string[]
 function M.open_roots(list)
-  return M.roots_of(list(true))
+  local roots = M.roots_of(list(true))
+  local seen = {}
+  for _, r in ipairs(roots) do
+    seen[r] = true
+  end
+  for _, r in ipairs(adopted) do
+    if not seen[r] then
+      roots[#roots + 1] = r
+    end
+  end
+  return roots
+end
+
+--- Take a repository root into the panel without a terminal (a fresh clone). Idempotent.
+---@param path string
+---@return boolean added False for an empty path or one already known
+function M.adopt(path)
+  if type(path) ~= "string" or path == "" then
+    return false
+  end
+  path = path:gsub("[/\\]+$", "")
+  for _, r in ipairs(adopted) do
+    if r == path then
+      return false
+    end
+  end
+  adopted[#adopted + 1] = path
+  return true
 end
 
 --- One line per repository.
@@ -317,6 +349,7 @@ end
 ---@return nil
 function M.reset()
   cache = {}
+  adopted = {}
 end
 
 return M

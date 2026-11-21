@@ -109,6 +109,30 @@ local function auto_insert(cfg)
   end, { group = group, desc = "terminal.nvim: enter Insert mode in terminals" })
 end
 
+---@internal
+--- Soft listener for reposcope.nvim's `User ReposcopeCloned` (`data = { path, url }`): the new clone
+--- joins the repository status panel, which redraws at once if it is open. Without reposcope the
+--- event never fires.
+---@return nil
+local function repo_cloned()
+  local group = augroup("repo_cloned")
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "ReposcopeCloned",
+    desc = "terminal.nvim: add a freshly cloned repository to the status panel",
+    callback = function(args)
+      local path = type(args.data) == "table" and args.data.path or nil
+      if not path or not require("terminal.repos").adopt(path) then
+        return
+      end
+      local panel = package.loaded["terminal.repos.panel"]
+      if panel and panel.is_open() then
+        panel.refresh({ force = true })
+      end
+    end,
+  })
+end
+
 --- Create the autocommands the config asks for. Features switched off leave an empty group.
 ---@param cfg Terminal.Config
 ---@return nil
@@ -116,6 +140,7 @@ function M.setup(cfg)
   window_options(cfg)
   kitty(cfg)
   auto_insert(cfg)
+  repo_cloned()
 end
 
 return M
