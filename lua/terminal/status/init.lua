@@ -48,7 +48,9 @@ end
 --- (`$NVIM` names a server that answers and is an ancestor of this process): it would write to the
 --- very pane the outer one owns. A dead `$NVIM`, or a live one that is no ancestor (a tmux server
 --- that was only started from a Neovim terminal), does not count; nor does one that cannot be told
---- (it exports and warns once). A name asks for the exporter anyway.
+--- (it exports and warns once). That is found out after `choose`, in the background from the first
+--- publication on (the tmux exporter's `ready`, then `drop`/`request`). A name asks for the exporter
+--- anyway.
 ---@param export string|string[]|boolean
 ---@param env table<string, string|nil>
 ---@return Terminal.StatusExporter[] chosen
