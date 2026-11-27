@@ -24,6 +24,14 @@ return {
           end
         end
         return n
+      end
+      ---Whether a child process of this editor (the tmux stand-in of a publish) is still running.
+      _G.process_running = function()
+        local running = false
+        vim.uv.walk(function(handle)
+          if handle:get_type() == "process" and handle:is_active() then running = true end
+        end)
+        return running
       end]],
     },
 
@@ -40,7 +48,18 @@ return {
       timeout = 5000,
       note = "the change starts tmux again (debounced)",
     },
+    { lua = [[_G.before_esc = _G.publishes()]] },
     { input = "<Esc>" },
+    {
+      wait = [[_G.publishes() > _G.before_esc]],
+      timeout = 5000,
+      note = "leaving insert mode publishes the mode once more",
+    },
+    {
+      wait = [[not _G.process_running()]],
+      timeout = 15000,
+      note = "and that publish is through (a slow stand-in, as on a busy Windows machine, no blind settle)",
+    },
     { lua = [[_G.settled = _G.publishes()]] },
     { settle = 300 },
     { keys = ":echo 1<CR>", note = "nothing the pane shows changed" },
