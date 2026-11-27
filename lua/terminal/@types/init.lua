@@ -42,6 +42,7 @@
 ---@field preset? boolean `false` binds nothing at all.
 ---@field toggle string|string[]|false
 ---@field normal_mode string|string[]|false
+---@field copy_buffer string|string[]|false
 ---@field clear string|string[]|false
 ---@field window_left string|string[]|false
 ---@field window_down string|string[]|false
@@ -146,6 +147,7 @@
 ---@field preset? boolean `false` binds nothing at all.
 ---@field toggle? string|string[]|false
 ---@field normal_mode? string|string[]|false
+---@field copy_buffer? string|string[]|false
 ---@field clear? string|string[]|false
 ---@field window_left? string|string[]|false
 ---@field window_down? string|string[]|false
