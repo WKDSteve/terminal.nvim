@@ -107,6 +107,12 @@ local DEFAULTS = {
     -- Only <Esc>: <C-c> stays the shell's own interrupt (it abandons a half-typed line and starts a new
     -- prompt). Add "<C-c>" to this list to have it leave terminal mode instead.
     normal_mode = { "<Esc>" },
+    -- Copy the whole terminal buffer (scrollback and screen, trailing blank rows dropped) to the
+    -- system clipboard, without leaving terminal mode. <C-S-c>, because plain <C-c> is the shell's
+    -- interrupt. It only arrives where the outer terminal passes the key on (kitty keyboard
+    -- protocol: WezTerm, kitty, foot, Ghostty); Windows Terminal keeps <C-S-c> for its own copy.
+    -- Set another key there (e.g. "<A-y>"), or false to drop it.
+    copy_buffer = "<C-S-c>",
     -- Off by default: <C-l> reaches the shell and clears the screen there, like in any terminal.
     -- Set a key to have the plugin type `cls` / `clear` for you instead.
     clear = false,

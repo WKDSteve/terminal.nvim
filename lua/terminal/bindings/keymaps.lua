@@ -32,6 +32,25 @@ local function clear_screen()
 end
 
 ---@internal
+--- Copy the whole terminal buffer, linewise, to the system clipboard (and the unnamed register).
+--- The buffer keeps the screen's blank rows below the last output; they are dropped.
+---@return nil
+local function copy_buffer()
+  local buf = vim.api.nvim_get_current_buf()
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  while #lines > 0 and lines[#lines]:match("^%s*$") do
+    lines[#lines] = nil
+  end
+  if #lines == 0 then
+    vim.notify("Terminal is empty, nothing copied", vim.log.levels.INFO)
+    return
+  end
+  vim.fn.setreg("+", lines, "V")
+  vim.fn.setreg('"', lines, "V")
+  vim.notify(("Copied %d line%s of the terminal"):format(#lines, #lines == 1 and "" or "s"))
+end
+
+---@internal
 --- Window navigation from terminal mode: leave it, then move (and hand off at the edge).
 ---@param dir Terminal.Direction
 ---@return fun()
@@ -89,6 +108,7 @@ function M.setup(cfg)
     order = {
       "toggle",
       "normal_mode",
+      "copy_buffer",
       "clear",
       "window_left",
       "window_down",
@@ -114,6 +134,12 @@ function M.setup(cfg)
         mode = "t",
         rhs = LEAVE,
         desc = "Leave terminal mode",
+      },
+      copy_buffer = {
+        default = DEFAULTS.copy_buffer or nil,
+        mode = "t",
+        rhs = copy_buffer,
+        desc = "Copy the whole terminal buffer to the clipboard",
       },
       clear = {
         default = DEFAULTS.clear or nil,

@@ -160,6 +160,20 @@ describe("terminal bindings", function()
       assert.equals(norm("<C-\\><C-n>"), norm(map("t", "<C-c>").rhs))
     end)
 
+    it("copies the whole terminal buffer without its trailing blank rows", function()
+      terminal.setup({ shell = jobs.sleeper() })
+      local m = map("t", "<C-S-c>")
+      assert.is_table(m, "copy_buffer is bound in terminal mode")
+      assert.is_function(m.callback)
+      local buf = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_set_current_buf(buf)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "one", "two", "", "  ", "" })
+      vim.fn.setreg("+", "")
+      m.callback()
+      assert.same({ "one", "two" }, vim.fn.getreg("+", 1, true))
+      assert.equals("V", vim.fn.getregtype("+"))
+    end)
+
     it("moves an action with a string and drops one with false", function()
       terminal.setup({
         shell = jobs.sleeper(),

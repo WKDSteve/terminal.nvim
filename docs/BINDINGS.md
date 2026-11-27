@@ -14,6 +14,7 @@ set on the same key afterwards stays), then binds again.
 |---|---|---|---|
 | `toggle` | `<A-h>` | normal, terminal | Toggle the terminal. A count picks terminal N (`3<A-h>`). |
 | `normal_mode` | `<Esc>` | terminal | Leave terminal mode (`<C-\><C-n>`). `<C-c>` is not bound: it reaches the shell as its interrupt; add it to the list to leave terminal mode with it. |
+| `copy_buffer` | `<C-S-c>` | terminal | Copy the whole terminal buffer (scrollback and screen, trailing blank rows dropped) to the clipboard and say how many lines. Only arrives where the outer terminal passes `<C-S-c>` on (kitty keyboard protocol: WezTerm, kitty, foot, Ghostty); Windows Terminal keeps it for its own copy, so bind another key there, e.g. `copy_buffer = "<A-y>"`. |
 | `clear` | off | terminal | Types `cls` when the terminal's shell is cmd.exe or PowerShell and `clear` for every other shell. The shell decides (`shell`, else Neovim's `'shell'`), not the OS: Git Bash or WSL on Windows get `clear`. Off by default: `<C-l>` clears in the shell itself. |
 | `window_left` | `<C-h>` | terminal | Window left; at Neovim's edge the multiplexer focuses the pane on that side ([navigation](navigation.md)). |
 | `window_down` | `<C-j>` | terminal | Window down (hands off at the edge). |

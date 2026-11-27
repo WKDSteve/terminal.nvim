@@ -160,6 +160,8 @@ and adopt also show the message; hide and close only answer.
                                       OS)
   nav_*            normal             (off) the same moves from Normal mode:
                                       nav_left/down/up/right, with a count
+  copy_buffer      terminal           <C-S-c> copy the whole terminal
+                                      buffer to the clipboard
   cheatsheet       normal, terminal   (off) open the cheatsheet of the shell
 
 Move one with `keymaps = { toggle = "<A-x>" }`, drop one with `false`, bind
